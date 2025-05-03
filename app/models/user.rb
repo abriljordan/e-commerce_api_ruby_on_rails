@@ -16,10 +16,11 @@ class User < ApplicationRecord
                       format: { with: /\A(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
                                message: "must include at least one lowercase letter, one uppercase letter, and one digit" }
   validates :phone_number, format: { with: /\A\+?[\d\s-]+\z/ }, allow_blank: true
+  validates :jti, presence: true, uniqueness: true
 
   enum :role, { customer: 0, admin: 1 }, default: :customer
 
-  before_create :set_default_role
+  before_create :set_default_role, :set_jti
   after_create :create_cart
 
   def full_name
@@ -42,10 +43,18 @@ class User < ApplicationRecord
     product_reviews.exists?(product_id: product.id)
   end
 
+  def generate_jwt
+    JsonWebToken.encode(user_id: id)
+  end
+
   private
 
   def set_default_role
     self.role ||= :customer
+  end
+
+  def set_jti
+    self.jti = SecureRandom.uuid
   end
 
   def create_cart

@@ -19,8 +19,7 @@ class Product < ApplicationRecord
   validates :active, inclusion: { in: [true, false] }
   validates :featured, inclusion: { in: [true, false] }
   validates :stock_quantity, numericality: { greater_than_or_equal_to: 0, only_integer: true }
-  validates :main_image, content_type: ['image/png', 'image/jpg', 'image/jpeg'],
-                        size: { less_than: 5.megabytes }
+  validate :validate_main_image
 
   scope :active, -> { where(active: true) }
   scope :featured, -> { where(featured: true) }
@@ -89,5 +88,20 @@ class Product < ApplicationRecord
 
   def restore_stock(quantity)
     update(stock_quantity: stock_quantity + quantity)
+  end
+
+  private
+
+  def validate_main_image
+    if main_image.attached?
+      unless main_image.content_type.in?(%w[image/png image/jpg image/jpeg])
+        errors.add(:main_image, 'must be a PNG, JPG, or JPEG image')
+      end
+      if main_image.byte_size > 5.megabytes
+        errors.add(:main_image, 'must be less than 5MB')
+      end
+    else
+      errors.add(:main_image, 'must be attached')
+    end
   end
 end

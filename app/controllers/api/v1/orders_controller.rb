@@ -28,6 +28,7 @@ module Api
         @order = current_user.orders.new(order_params)
         
         if @order.save
+          @order.calculate_total
           # Clear the cart after successful order creation
           current_user.cart.cart_items.destroy_all
           render json: @order, status: :created

@@ -1,5 +1,5 @@
 FactoryBot.define do
   factory :cart do
-    association :user
+    user
   end
-end
+end 
