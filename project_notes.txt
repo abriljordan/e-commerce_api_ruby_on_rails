@@ -1634,6 +1634,3706 @@ For each feature, prepare to discuss:
 Would you like to start with the first exercise? We can begin with the database schema study and work through the User model implementation. I can provide more detailed guidance and code examples for each step.
 
 
+Great! Let's start with the first exercise: Database Schema Study. I'll guide you through understanding and implementing the core database structure.
+
+# Exercise 1: Database Schema Study
+
+## Step 1: Core Tables Analysis
+
+Let's start by examining and implementing the essential tables for our e-commerce system:
+
+```ruby
+# 1. First, let's create a migration for users
+class CreateUsers < ActiveRecord::Migration[7.0]
+  def change
+    create_table :users do |t|
+      t.string :email, null: false, index: { unique: true }
+      t.string :password_digest, null: false
+      t.string :first_name
+      t.string :last_name
+      t.string :phone_number
+      t.boolean :is_admin, default: false
+      t.boolean :is_active, default: true
+      t.datetime :last_login_at
+      t.timestamps
+    end
+  end
+end
+
+# 2. Categories table
+class CreateCategories < ActiveRecord::Migration[7.0]
+  def change
+    create_table :categories do |t|
+      t.string :name, null: false
+      t.string :slug, null: false, index: { unique: true }
+      t.text :description
+      t.references :parent, foreign_key: { to_table: :categories }
+      t.integer :position
+      t.boolean :is_active, default: true
+      t.timestamps
+    end
+  end
+end
+
+# 3. Products table
+class CreateProducts < ActiveRecord::Migration[7.0]
+  def change
+    create_table :products do |t|
+      t.references :category, null: false, foreign_key: true
+      t.string :name, null: false
+      t.string :slug, null: false, index: { unique: true }
+      t.text :description
+      t.decimal :base_price, precision: 10, scale: 2, null: false
+      t.integer :stock_quantity, default: 0
+      t.boolean :is_active, default: true
+      t.boolean :is_featured, default: false
+      t.jsonb :metadata
+      t.timestamps
+    end
+  end
+end
+```
+
+## Step 2: Understanding Relationships
+
+Let's analyze the relationships between these tables:
+
+1. **User Relationships**:
+```ruby
+class User < ApplicationRecord
+  has_many :orders
+  has_one :cart
+  has_many :addresses
+  has_many :product_reviews
+end
+```
+
+2. **Product Relationships**:
+```ruby
+class Product < ApplicationRecord
+  belongs_to :category
+  has_many :product_variants
+  has_many :cart_items
+  has_many :order_items
+  has_many :product_reviews
+end
+```
+
+## Step 3: Implementation Exercise
+
+Let's implement the User model with proper validations and methods:
+
+```ruby
+# app/models/user.rb
+class User < ApplicationRecord
+  # Include password encryption
+  has_secure_password
+
+  # Associations
+  has_many :orders
+  has_one :cart
+  has_many :addresses
+  has_many :product_reviews
+
+  # Validations
+  validates :email, 
+    presence: true, 
+    uniqueness: true,
+    format: { with: URI::MailTo::EMAIL_REGEXP }
+  validates :password, 
+    length: { minimum: 8 },
+    if: -> { new_record? || !password.nil? }
+  validates :first_name, presence: true
+  validates :last_name, presence: true
+
+  # Callbacks
+  before_create :generate_cart
+  after_create :send_welcome_email
+
+  # Methods
+  def generate_jwt
+    JWT.encode(
+      { 
+        user_id: id,
+        exp: 24.hours.from_now.to_i 
+      },
+      Rails.application.credentials.secret_key_base
+    )
+  end
+
+  def full_name
+    "#{first_name} #{last_name}"
+  end
+
+  private
+
+  def generate_cart
+    build_cart
+  end
+
+  def send_welcome_email
+    UserMailer.welcome_email(self).deliver_later
+  end
+end
+```
+
+## Step 4: Testing Implementation
+
+Let's write tests for the User model:
+
+```ruby
+# spec/models/user_spec.rb
+require 'rails_helper'
+
+RSpec.describe User, type: :model do
+  let(:user) { build(:user) }
+
+  describe 'validations' do
+    it 'is valid with valid attributes' do
+      expect(user).to be_valid
+    end
+
+    it 'is not valid without an email' do
+      user.email = nil
+      expect(user).not_to be_valid
+    end
+
+    it 'is not valid with invalid email format' do
+      user.email = 'invalid_email'
+      expect(user).not_to be_valid
+    end
+
+    it 'is not valid with short password' do
+      user.password = 'short'
+      expect(user).not_to be_valid
+    end
+  end
+
+  describe 'associations' do
+    it 'has many orders' do
+      expect(User.reflect_on_association(:orders).macro).to eq(:has_many)
+    end
+
+    it 'has one cart' do
+      expect(User.reflect_on_association(:cart).macro).to eq(:has_one)
+    end
+  end
+
+  describe 'methods' do
+    it 'generates JWT token' do
+      user.save
+      token = user.generate_jwt
+      expect(token).to be_a(String)
+      expect(token.split('.').length).to eq(3)
+    end
+
+    it 'returns full name' do
+      expect(user.full_name).to eq("#{user.first_name} #{user.last_name}")
+    end
+  end
+end
+```
+
+## Step 5: Factory Implementation
+
+Let's create a factory for testing:
+
+```ruby
+# spec/factories/users.rb
+FactoryBot.define do
+  factory :user do
+    sequence(:email) { |n| "user#{n}@example.com" }
+    password { 'password123' }
+    first_name { 'John' }
+    last_name { 'Doe' }
+    phone_number { '+1234567890' }
+    is_admin { false }
+    is_active { true }
+
+    trait :admin do
+      is_admin { true }
+    end
+
+    trait :inactive do
+      is_active { false }
+    end
+  end
+end
+```
+
+## Exercise Questions:
+
+1. **Database Design**:
+   - Why do we need unique indexes on email and slug fields?
+   - What's the purpose of the `metadata` JSONB column in products?
+   - Why do we use `precision` and `scale` for decimal fields?
+
+2. **Model Relationships**:
+   - Why does a User have_one Cart instead of has_many?
+   - What's the purpose of the `parent` reference in categories?
+   - How would you implement a product search feature?
+
+3. **Implementation Details**:
+   - Why do we use `has_secure_password`?
+   - What's the purpose of the JWT token generation?
+   - Why do we use `deliver_later` for emails?
+
+## Next Steps:
+
+1. Implement the Category model
+2. Implement the Product model
+3. Set up the authentication system
+
+Would you like to proceed with implementing any of these next steps? Or would you like to discuss any of the questions above first?
+
+
+I'll guide you through implementing the Category and Product models, followed by the authentication system. Let's do this step by step.
+
+## 1. Category Model Implementation
+
+First, let's create the Category model and its tests:
+
+```ruby
+# app/models/category.rb
+class Category < ApplicationRecord
+  # Associations
+  belongs_to :parent, class_name: 'Category', optional: true
+  has_many :subcategories, class_name: 'Category', foreign_key: :parent_id
+  has_many :products
+
+  # Validations
+  validates :name, presence: true
+  validates :slug, presence: true, uniqueness: true
+  validate :parent_not_self
+
+  # Callbacks
+  before_validation :generate_slug
+  before_destroy :check_for_products
+
+  # Scopes
+  scope :root_categories, -> { where(parent_id: nil) }
+  scope :active, -> { where(is_active: true) }
+
+  # Methods
+  def full_path
+    if parent
+      "#{parent.full_path} > #{name}"
+    else
+      name
+    end
+  end
+
+  private
+
+  def generate_slug
+    self.slug = name.parameterize if slug.blank? && name.present?
+  end
+
+  def parent_not_self
+    if parent_id == id
+      errors.add(:parent_id, "can't be self")
+    end
+  end
+
+  def check_for_products
+    if products.any?
+      errors.add(:base, "Cannot delete category with products")
+      throw(:abort)
+    end
+  end
+end
+```
+
+Now, let's create the tests for Category:
+
+```ruby
+# spec/models/category_spec.rb
+require 'rails_helper'
+
+RSpec.describe Category, type: :model do
+  let(:category) { build(:category) }
+
+  describe 'validations' do
+    it 'is valid with valid attributes' do
+      expect(category).to be_valid
+    end
+
+    it 'is not valid without a name' do
+      category.name = nil
+      expect(category).not_to be_valid
+    end
+
+    it 'generates slug from name' do
+      category.name = 'Test Category'
+      category.save
+      expect(category.slug).to eq('test-category')
+    end
+
+    it 'cannot be its own parent' do
+      category.save
+      category.parent = category
+      expect(category).not_to be_valid
+    end
+  end
+
+  describe 'associations' do
+    it 'has many products' do
+      expect(Category.reflect_on_association(:products).macro).to eq(:has_many)
+    end
+
+    it 'can have subcategories' do
+      parent = create(:category)
+      child = create(:category, parent: parent)
+      expect(parent.subcategories).to include(child)
+    end
+  end
+
+  describe 'methods' do
+    it 'returns full path' do
+      parent = create(:category, name: 'Parent')
+      child = create(:category, name: 'Child', parent: parent)
+      expect(child.full_path).to eq('Parent > Child')
+    end
+  end
+end
+```
+
+## 2. Product Model Implementation
+
+Now, let's implement the Product model:
+
+```ruby
+# app/models/product.rb
+class Product < ApplicationRecord
+  # Associations
+  belongs_to :category
+  has_many :product_variants
+  has_many :cart_items
+  has_many :order_items
+  has_many :product_reviews
+  has_many_attached :images
+
+  # Validations
+  validates :name, presence: true
+  validates :slug, presence: true, uniqueness: true
+  validates :base_price, numericality: { greater_than: 0 }
+  validates :stock_quantity, numericality: { greater_than_or_equal_to: 0 }
+  validate :validate_images
+
+  # Callbacks
+  before_validation :generate_slug
+  before_save :update_stock_status
+
+  # Scopes
+  scope :active, -> { where(is_active: true) }
+  scope :featured, -> { where(is_featured: true) }
+  scope :in_stock, -> { where('stock_quantity > 0') }
+  scope :by_category, ->(category_id) { where(category_id: category_id) }
+
+  # Methods
+  def update_stock(quantity)
+    with_lock do
+      self.stock_quantity += quantity
+      save!
+    end
+  end
+
+  def available?
+    stock_quantity.positive? && is_active
+  end
+
+  def average_rating
+    product_reviews.average(:rating)&.round(1) || 0
+  end
+
+  private
+
+  def generate_slug
+    self.slug = name.parameterize if slug.blank? && name.present?
+  end
+
+  def update_stock_status
+    self.is_active = stock_quantity.positive?
+  end
+
+  def validate_images
+    return unless images.attached?
+    
+    images.each do |image|
+      unless image.content_type.in?(%w[image/jpeg image/png image/gif])
+        errors.add(:images, 'must be a JPEG, PNG, or GIF')
+      end
+    end
+  end
+end
+```
+
+Let's create the tests for Product:
+
+```ruby
+# spec/models/product_spec.rb
+require 'rails_helper'
+
+RSpec.describe Product, type: :model do
+  let(:product) { build(:product) }
+
+  describe 'validations' do
+    it 'is valid with valid attributes' do
+      expect(product).to be_valid
+    end
+
+    it 'is not valid without a name' do
+      product.name = nil
+      expect(product).not_to be_valid
+    end
+
+    it 'is not valid with negative price' do
+      product.base_price = -1
+      expect(product).not_to be_valid
+    end
+
+    it 'generates slug from name' do
+      product.name = 'Test Product'
+      product.save
+      expect(product.slug).to eq('test-product')
+    end
+  end
+
+  describe 'associations' do
+    it 'belongs to category' do
+      expect(Product.reflect_on_association(:category).macro).to eq(:belongs_to)
+    end
+
+    it 'has many variants' do
+      expect(Product.reflect_on_association(:product_variants).macro).to eq(:has_many)
+    end
+  end
+
+  describe 'methods' do
+    it 'updates stock quantity' do
+      product.save
+      product.update_stock(5)
+      expect(product.stock_quantity).to eq(5)
+    end
+
+    it 'checks availability' do
+      product.stock_quantity = 0
+      expect(product.available?).to be_falsey
+    end
+  end
+end
+```
+
+## 3. Authentication System Implementation
+
+Now, let's implement the authentication system:
+
+```ruby
+# app/controllers/api/v1/auth_controller.rb
+module Api
+  module V1
+    class AuthController < ApplicationController
+      skip_before_action :authenticate_request, only: [:login, :register]
+
+      def login
+        user = User.find_by(email: params[:email])
+        
+        if user&.authenticate(params[:password])
+          token = user.generate_jwt
+          render json: {
+            access_token: token,
+            token_type: 'Bearer',
+            expires_in: 24.hours.to_i,
+            user: UserSerializer.new(user)
+          }
+        else
+          render json: { error: 'Invalid email or password' }, status: :unauthorized
+        end
+      end
+
+      def register
+        user = User.new(user_params)
+        
+        if user.save
+          token = user.generate_jwt
+          render json: {
+            access_token: token,
+            token_type: 'Bearer',
+            expires_in: 24.hours.to_i,
+            user: UserSerializer.new(user)
+          }, status: :created
+        else
+          render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+        end
+      end
+
+      def refresh_token
+        token = current_user.generate_jwt
+        render json: {
+          access_token: token,
+          token_type: 'Bearer',
+          expires_in: 24.hours.to_i
+        }
+      end
+
+      def logout
+        # In a real application, you might want to blacklist the token
+        render json: { message: 'Successfully logged out' }
+      end
+
+      private
+
+      def user_params
+        params.require(:user).permit(
+          :email,
+          :password,
+          :first_name,
+          :last_name,
+          :phone_number
+        )
+      end
+    end
+  end
+end
+```
+
+Let's create the authentication tests:
+
+```ruby
+# spec/requests/api/v1/auth_spec.rb
+require 'rails_helper'
+
+RSpec.describe 'Api::V1::Auth', type: :request do
+  let(:user) { create(:user) }
+  let(:valid_attributes) do
+    {
+      email: 'test@example.com',
+      password: 'password123',
+      first_name: 'Test',
+      last_name: 'User'
+    }
+  end
+
+  describe 'POST /api/v1/auth/login' do
+    it 'authenticates user with valid credentials' do
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: user.password
+      }
+      
+      expect(response).to have_http_status(:ok)
+      expect(json_response).to include('access_token')
+    end
+
+    it 'returns error with invalid credentials' do
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: 'wrongpassword'
+      }
+      
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
+  describe 'POST /api/v1/auth/register' do
+    it 'creates new user' do
+      post '/api/v1/auth/register', params: {
+        user: valid_attributes
+      }
+      
+      expect(response).to have_http_status(:created)
+      expect(json_response).to include('access_token')
+    end
+
+    it 'returns error with invalid data' do
+      post '/api/v1/auth/register', params: {
+        user: valid_attributes.merge(email: 'invalid')
+      }
+      
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
+
+  private
+
+  def json_response
+    JSON.parse(response.body)
+  end
+end
+```
+
+## 4. Authentication Concern
+
+Let's create an authentication concern for the application controller:
+
+```ruby
+# app/controllers/concerns/authenticable.rb
+module Authenticable
+  extend ActiveSupport::Concern
+
+  included do
+    before_action :authenticate_request
+  end
+
+  private
+
+  def authenticate_request
+    header = request.headers['Authorization']
+    token = header.split(' ').last if header
+    
+    begin
+      decoded = JWT.decode(token, Rails.application.credentials.secret_key_base)[0]
+      @current_user = User.find(decoded['user_id'])
+    rescue JWT::DecodeError, ActiveRecord::RecordNotFound
+      render json: { error: 'Unauthorized' }, status: :unauthorized
+    end
+  end
+
+  def current_user
+    @current_user
+  end
+end
+```
+
+## 5. Routes Setup
+
+Finally, let's set up the routes:
+
+```ruby
+# config/routes.rb
+Rails.application.routes.draw do
+  namespace :api do
+    namespace :v1 do
+      # Auth routes
+      post 'auth/login', to: 'auth#login'
+      post 'auth/register', to: 'auth#register'
+      post 'auth/refresh', to: 'auth#refresh_token'
+      delete 'auth/logout', to: 'auth#logout'
+
+      # Resource routes
+      resources :products, only: [:index, :show]
+      resources :categories, only: [:index, :show]
+      resources :cart_items, only: [:index, :create, :update, :destroy]
+      resources :orders, only: [:index, :show, :create]
+    end
+  end
+end
+```
+
+## Exercise Questions:
+
+1. **Category Implementation**:
+   - Why do we use `parameterize` for slugs?
+   - What's the purpose of the `parent_not_self` validation?
+   - How would you implement category hierarchy navigation?
+
+2. **Product Implementation**:
+   - Why do we use `with_lock` in the `update_stock` method?
+   - What's the purpose of the `metadata` JSONB column?
+   - How would you implement product search with categories?
+
+3. **Authentication**:
+   - Why do we skip authentication for login and register?
+   - What's the purpose of the JWT token expiration?
+   - How would you implement token blacklisting?
+
+Would you like to proceed with implementing any additional features or would you like to discuss any of these questions?
+
+
+I'll guide you through implementing additional key features for the e-commerce system. Let's start with the shopping cart system, followed by order processing, and then add some advanced features.
+
+## 1. Shopping Cart System Implementation
+
+First, let's implement the Cart and CartItem models:
+
+```ruby
+# app/models/cart.rb
+class Cart < ApplicationRecord
+  belongs_to :user
+  has_many :cart_items, dependent: :destroy
+  has_many :products, through: :cart_items
+
+  # Methods
+  def add_product(product_id, quantity = 1)
+    product = Product.find(product_id)
+    cart_item = cart_items.find_or_initialize_by(product_id: product_id)
+    
+    with_lock do
+      if cart_item.new_record?
+        cart_item.quantity = quantity
+        cart_item.unit_price = product.base_price
+      else
+        cart_item.quantity += quantity
+      end
+      
+      cart_item.save!
+    end
+  end
+
+  def remove_product(product_id)
+    cart_items.find_by(product_id: product_id)&.destroy
+  end
+
+  def update_quantity(product_id, quantity)
+    cart_item = cart_items.find_by(product_id: product_id)
+    return unless cart_item
+    
+    with_lock do
+      if quantity <= 0
+        cart_item.destroy
+      else
+        cart_item.update!(quantity: quantity)
+      end
+    end
+  end
+
+  def total_price
+    cart_items.sum { |item| item.quantity * item.unit_price }
+  end
+
+  def clear
+    cart_items.destroy_all
+  end
+end
+
+# app/models/cart_item.rb
+class CartItem < ApplicationRecord
+  belongs_to :cart
+  belongs_to :product
+
+  validates :quantity, numericality: { greater_than: 0 }
+  validates :unit_price, numericality: { greater_than: 0 }
+
+  before_validation :set_unit_price
+
+  private
+
+  def set_unit_price
+    self.unit_price = product.base_price if product && unit_price.nil?
+  end
+end
+```
+
+Now, let's implement the Cart Controller:
+
+```ruby
+# app/controllers/api/v1/cart_items_controller.rb
+module Api
+  module V1
+    class CartItemsController < ApplicationController
+      before_action :set_cart
+      before_action :set_cart_item, only: [:update, :destroy]
+
+      def index
+        render json: @cart.cart_items, each_serializer: CartItemSerializer
+      end
+
+      def create
+        @cart_item = @cart.cart_items.new(cart_item_params)
+        
+        if @cart_item.save
+          render json: @cart_item, status: :created
+        else
+          render json: { errors: @cart_item.errors.full_messages }, 
+                 status: :unprocessable_entity
+        end
+      end
+
+      def update
+        if @cart_item.update(cart_item_params)
+          render json: @cart_item
+        else
+          render json: { errors: @cart_item.errors.full_messages }, 
+                 status: :unprocessable_entity
+        end
+      end
+
+      def destroy
+        @cart_item.destroy
+        head :no_content
+      end
+
+      private
+
+      def set_cart
+        @cart = current_user.cart || current_user.create_cart
+      end
+
+      def set_cart_item
+        @cart_item = @cart.cart_items.find(params[:id])
+      end
+
+      def cart_item_params
+        params.require(:cart_item).permit(:product_id, :quantity)
+      end
+    end
+  end
+end
+```
+
+## 2. Order Processing System
+
+Let's implement the Order and OrderItem models:
+
+```ruby
+# app/models/order.rb
+class Order < ApplicationRecord
+  belongs_to :user
+  belongs_to :shipping_address, class_name: 'Address'
+  belongs_to :billing_address, class_name: 'Address'
+  has_many :order_items, dependent: :destroy
+  has_many :products, through: :order_items
+
+  enum status: {
+    pending: 0,
+    processing: 1,
+    shipped: 2,
+    delivered: 3,
+    cancelled: 4
+  }
+
+  validates :status, presence: true
+  validates :total_amount, numericality: { greater_than: 0 }
+  validate :validate_addresses
+
+  before_validation :calculate_total
+  after_create :update_inventory
+
+  # Methods
+  def process_payment(payment_method, payment_details)
+    # In a real application, integrate with a payment gateway
+    update(payment_method: payment_method, payment_status: 'paid')
+  end
+
+  def cancel
+    return unless pending?
+    
+    transaction do
+      update(status: :cancelled)
+      order_items.each do |item|
+        item.product.update_stock(item.quantity)
+      end
+    end
+  end
+
+  private
+
+  def calculate_total
+    self.total_amount = order_items.sum { |item| item.quantity * item.unit_price }
+  end
+
+  def update_inventory
+    order_items.each do |item|
+      item.product.update_stock(-item.quantity)
+    end
+  end
+
+  def validate_addresses
+    if shipping_address_id == billing_address_id
+      errors.add(:base, "Shipping and billing addresses must be different")
+    end
+  end
+end
+
+# app/models/order_item.rb
+class OrderItem < ApplicationRecord
+  belongs_to :order
+  belongs_to :product
+
+  validates :quantity, numericality: { greater_than: 0 }
+  validates :unit_price, numericality: { greater_than: 0 }
+  validate :validate_stock
+
+  before_validation :set_unit_price
+
+  private
+
+  def set_unit_price
+    self.unit_price = product.base_price if product && unit_price.nil?
+  end
+
+  def validate_stock
+    if product.stock_quantity < quantity
+      errors.add(:quantity, "exceeds available stock")
+    end
+  end
+end
+```
+
+Now, let's implement the Order Controller:
+
+```ruby
+# app/controllers/api/v1/orders_controller.rb
+module Api
+  module V1
+    class OrdersController < ApplicationController
+      before_action :set_order, only: [:show, :cancel]
+
+      def index
+        @orders = current_user.orders
+        render json: @orders, each_serializer: OrderSerializer
+      end
+
+      def show
+        render json: @order, serializer: OrderSerializer
+      end
+
+      def create
+        @order = current_user.orders.new(order_params)
+        
+        if @order.save
+          # Clear the cart after successful order
+          current_user.cart.clear
+          
+          render json: @order, status: :created
+        else
+          render json: { errors: @order.errors.full_messages }, 
+                 status: :unprocessable_entity
+        end
+      end
+
+      def cancel
+        if @order.cancel
+          render json: @order
+        else
+          render json: { errors: @order.errors.full_messages }, 
+                 status: :unprocessable_entity
+        end
+      end
+
+      private
+
+      def set_order
+        @order = current_user.orders.find(params[:id])
+      end
+
+      def order_params
+        params.require(:order).permit(
+          :shipping_address_id,
+          :billing_address_id,
+          order_items_attributes: [:product_id, :quantity]
+        )
+      end
+    end
+  end
+end
+```
+
+## 3. Advanced Features: Product Reviews and Ratings
+
+Let's implement the review system:
+
+```ruby
+# app/models/product_review.rb
+class ProductReview < ApplicationRecord
+  belongs_to :user
+  belongs_to :product
+  belongs_to :order, optional: true
+
+  validates :rating, numericality: { 
+    only_integer: true,
+    greater_than_or_equal_to: 1,
+    less_than_or_equal_to: 5
+  }
+  validates :title, presence: true
+  validates :content, presence: true
+  validate :validate_order_ownership, if: :order_id
+
+  after_save :update_product_rating
+
+  private
+
+  def update_product_rating
+    product.update_column(:average_rating, product.product_reviews.average(:rating))
+  end
+
+  def validate_order_ownership
+    unless order.user_id == user_id
+      errors.add(:order, "must be your own order")
+    end
+  end
+end
+
+# app/controllers/api/v1/product_reviews_controller.rb
+module Api
+  module V1
+    class ProductReviewsController < ApplicationController
+      before_action :set_product
+      before_action :set_review, only: [:update, :destroy]
+
+      def index
+        @reviews = @product.product_reviews.includes(:user)
+        render json: @reviews, each_serializer: ProductReviewSerializer
+      end
+
+      def create
+        @review = @product.product_reviews.new(review_params)
+        @review.user = current_user
+        
+        if @review.save
+          render json: @review, status: :created
+        else
+          render json: { errors: @review.errors.full_messages }, 
+                 status: :unprocessable_entity
+        end
+      end
+
+      def update
+        if @review.update(review_params)
+          render json: @review
+        else
+          render json: { errors: @review.errors.full_messages }, 
+                 status: :unprocessable_entity
+        end
+      end
+
+      def destroy
+        @review.destroy
+        head :no_content
+      end
+
+      private
+
+      def set_product
+        @product = Product.find(params[:product_id])
+      end
+
+      def set_review
+        @review = @product.product_reviews.find(params[:id])
+      end
+
+      def review_params
+        params.require(:product_review).permit(
+          :rating,
+          :title,
+          :content,
+          :order_id
+        )
+      end
+    end
+  end
+end
+```
+
+## 4. Advanced Features: Search and Filtering
+
+Let's implement a search service:
+
+```ruby
+# app/services/product_search_service.rb
+class ProductSearchService
+  def initialize(params)
+    @query = params[:query]
+    @category_id = params[:category_id]
+    @min_price = params[:min_price]
+    @max_price = params[:max_price]
+    @sort_by = params[:sort_by]
+    @page = params[:page] || 1
+    @per_page = params[:per_page] || 20
+  end
+
+  def call
+    products = Product.active.includes(:category)
+    
+    products = filter_by_query(products)
+    products = filter_by_category(products)
+    products = filter_by_price(products)
+    products = sort_products(products)
+    
+    products.page(@page).per(@per_page)
+  end
+
+  private
+
+  def filter_by_query(products)
+    return products unless @query.present?
+    
+    products.where(
+      'name ILIKE :query OR description ILIKE :query',
+      query: "%#{@query}%"
+    )
+  end
+
+  def filter_by_category(products)
+    return products unless @category_id.present?
+    
+    products.where(category_id: @category_id)
+  end
+
+  def filter_by_price(products)
+    products = products.where('base_price >= ?', @min_price) if @min_price.present?
+    products = products.where('base_price <= ?', @max_price) if @max_price.present?
+    products
+  end
+
+  def sort_products(products)
+    case @sort_by
+    when 'price_asc'
+      products.order(base_price: :asc)
+    when 'price_desc'
+      products.order(base_price: :desc)
+    when 'newest'
+      products.order(created_at: :desc)
+    when 'popular'
+      products.order(average_rating: :desc)
+    else
+      products.order(created_at: :desc)
+    end
+  end
+end
+```
+
+Would you like me to continue with more advanced features like:
+1. Payment Gateway Integration
+2. Email Notifications System
+3. Admin Dashboard
+4. Analytics and Reporting
+5. Caching System
+
+Or would you like to focus on testing any of the features we've implemented so far?
+
+
+I'll guide you through implementing more advanced features, starting with Payment Gateway Integration and Email Notifications.
+
+## 1. Payment Gateway Integration
+
+First, let's create a payment service:
+
+```ruby
+# app/services/payment_service.rb
+class PaymentService
+  def initialize(order, payment_method, payment_details)
+    @order = order
+    @payment_method = payment_method
+    @payment_details = payment_details
+  end
+
+  def process_payment
+    case @payment_method
+    when 'credit_card'
+      process_credit_card
+    when 'paypal'
+      process_paypal
+    when 'stripe'
+      process_stripe
+    else
+      raise "Unsupported payment method: #{@payment_method}"
+    end
+  end
+
+  private
+
+  def process_credit_card
+    # In a real application, integrate with a payment gateway
+    # This is a mock implementation
+    payment = Payment.create!(
+      order: @order,
+      amount: @order.total_amount,
+      payment_method: @payment_method,
+      status: 'processing'
+    )
+
+    # Simulate payment processing
+    if valid_credit_card?
+      payment.update!(status: 'completed')
+      @order.update!(payment_status: 'paid')
+      send_payment_confirmation
+      true
+    else
+      payment.update!(status: 'failed')
+      @order.update!(payment_status: 'failed')
+      false
+    end
+  end
+
+  def process_paypal
+    # PayPal integration would go here
+    # Similar structure to credit card processing
+  end
+
+  def process_stripe
+    # Stripe integration would go here
+    # Similar structure to credit card processing
+  end
+
+  def valid_credit_card?
+    # In a real application, validate with payment gateway
+    @payment_details[:card_number].present? &&
+    @payment_details[:expiry_date].present? &&
+    @payment_details[:cvv].present?
+  end
+end
+
+# app/models/payment.rb
+class Payment < ApplicationRecord
+  belongs_to :order
+
+  validates :amount, numericality: { greater_than: 0 }
+  validates :payment_method, presence: true
+  validates :status, presence: true
+
+  enum status: {
+    pending: 0,
+    processing: 1,
+    completed: 2,
+    failed: 3,
+    refunded: 4
+  }
+
+  after_create :log_payment_attempt
+  after_update :notify_status_change
+
+  private
+
+  def log_payment_attempt
+    PaymentAttempt.create!(
+      payment: self,
+      status: status,
+      details: attributes.except('id', 'created_at', 'updated_at')
+    )
+  end
+
+  def notify_status_change
+    return unless saved_change_to_status?
+    
+    case status
+    when 'completed'
+      PaymentMailer.payment_success(self).deliver_later
+    when 'failed'
+      PaymentMailer.payment_failed(self).deliver_later
+    end
+  end
+end
+```
+
+## 2. Email Notifications System
+
+Let's implement a comprehensive email notification system:
+
+```ruby
+# app/mailers/order_mailer.rb
+class OrderMailer < ApplicationMailer
+  def order_confirmation(order)
+    @order = order
+    @user = order.user
+    
+    mail(
+      to: @user.email,
+      subject: "Order Confirmation - #{@order.order_number}"
+    )
+  end
+
+  def order_shipped(order)
+    @order = order
+    @user = order.user
+    
+    mail(
+      to: @user.email,
+      subject: "Your Order Has Shipped - #{@order.order_number}"
+    )
+  end
+
+  def order_delivered(order)
+    @order = order
+    @user = order.user
+    
+    mail(
+      to: @user.email,
+      subject: "Your Order Has Been Delivered - #{@order.order_number}"
+    )
+  end
+end
+
+# app/mailers/payment_mailer.rb
+class PaymentMailer < ApplicationMailer
+  def payment_success(payment)
+    @payment = payment
+    @order = payment.order
+    @user = @order.user
+    
+    mail(
+      to: @user.email,
+      subject: "Payment Successful - Order #{@order.order_number}"
+    )
+  end
+
+  def payment_failed(payment)
+    @payment = payment
+    @order = payment.order
+    @user = @order.user
+    
+    mail(
+      to: @user.email,
+      subject: "Payment Failed - Order #{@order.order_number}"
+    )
+  end
+end
+
+# app/mailers/user_mailer.rb
+class UserMailer < ApplicationMailer
+  def welcome_email(user)
+    @user = user
+    
+    mail(
+      to: @user.email,
+      subject: 'Welcome to Our Store!'
+    )
+  end
+
+  def password_reset(user)
+    @user = user
+    @reset_url = password_reset_url(@user.reset_password_token)
+    
+    mail(
+      to: @user.email,
+      subject: 'Password Reset Instructions'
+    )
+  end
+
+  def account_activity(user, activity)
+    @user = user
+    @activity = activity
+    
+    mail(
+      to: @user.email,
+      subject: 'Account Activity Notification'
+    )
+  end
+end
+```
+
+## 3. Admin Dashboard
+
+Let's implement an admin dashboard with analytics:
+
+```ruby
+# app/controllers/admin/dashboard_controller.rb
+module Admin
+  class DashboardController < ApplicationController
+    before_action :authenticate_admin!
+    
+    def index
+      @stats = {
+        total_orders: Order.count,
+        total_revenue: Order.completed.sum(:total_amount),
+        total_users: User.count,
+        total_products: Product.count
+      }
+      
+      @recent_orders = Order.includes(:user)
+                          .order(created_at: :desc)
+                          .limit(10)
+      
+      @top_products = Product.joins(:order_items)
+                           .group('products.id')
+                           .order('COUNT(order_items.id) DESC')
+                           .limit(5)
+      
+      @sales_data = Order.completed
+                        .group_by_day(:created_at, last: 30)
+                        .sum(:total_amount)
+    end
+  end
+end
+
+# app/services/admin/analytics_service.rb
+module Admin
+  class AnalyticsService
+    def initialize(start_date, end_date)
+      @start_date = start_date
+      @end_date = end_date
+    end
+
+    def sales_report
+      {
+        total_sales: calculate_total_sales,
+        average_order_value: calculate_aov,
+        top_products: find_top_products,
+        sales_by_category: sales_by_category,
+        customer_acquisition: customer_acquisition_data
+      }
+    end
+
+    private
+
+    def calculate_total_sales
+      Order.completed
+           .where(created_at: @start_date..@end_date)
+           .sum(:total_amount)
+    end
+
+    def calculate_aov
+      total_orders = Order.completed
+                         .where(created_at: @start_date..@end_date)
+                         .count
+      
+      return 0 if total_orders.zero?
+      
+      calculate_total_sales / total_orders
+    end
+
+    def find_top_products
+      Product.joins(:order_items)
+             .where(order_items: { order: Order.completed.where(created_at: @start_date..@end_date) })
+             .group('products.id')
+             .order('COUNT(order_items.id) DESC')
+             .limit(10)
+    end
+
+    def sales_by_category
+      Category.joins(products: { order_items: :order })
+              .where(orders: { status: :completed, created_at: @start_date..@end_date })
+              .group('categories.id')
+              .sum('order_items.quantity * order_items.unit_price')
+    end
+
+    def customer_acquisition_data
+      {
+        new_customers: User.where(created_at: @start_date..@end_date).count,
+        returning_customers: calculate_returning_customers,
+        customer_lifetime_value: calculate_clv
+      }
+    end
+
+    def calculate_returning_customers
+      User.joins(:orders)
+          .where(orders: { created_at: @start_date..@end_date })
+          .group('users.id')
+          .having('COUNT(orders.id) > 1')
+          .count
+    end
+
+    def calculate_clv
+      # Calculate average customer lifetime value
+      total_revenue = Order.completed.sum(:total_amount)
+      total_customers = User.count
+      
+      return 0 if total_customers.zero?
+      
+      total_revenue / total_customers
+    end
+  end
+end
+```
+
+## 4. Caching System
+
+Let's implement a caching system for better performance:
+
+```ruby
+# app/models/concerns/cacheable.rb
+module Cacheable
+  extend ActiveSupport::Concern
+
+  included do
+    after_commit :clear_cache
+  end
+
+  def cache_key
+    "#{self.class.name.downcase}/#{id}-#{updated_at.to_i}"
+  end
+
+  def clear_cache
+    Rails.cache.delete(cache_key)
+    Rails.cache.delete("#{self.class.name.downcase}/all")
+  end
+
+  class_methods do
+    def cached_find(id)
+      Rails.cache.fetch("#{name.downcase}/#{id}") do
+        find(id)
+      end
+    end
+
+    def cached_all
+      Rails.cache.fetch("#{name.downcase}/all") do
+        all.to_a
+      end
+    end
+  end
+end
+
+# app/controllers/concerns/cache_headers.rb
+module CacheHeaders
+  extend ActiveSupport::Concern
+
+  included do
+    after_action :set_cache_headers
+  end
+
+  private
+
+  def set_cache_headers
+    if action_name == 'show' || action_name == 'index'
+      response.headers['Cache-Control'] = 'public, max-age=300'
+      response.headers['ETag'] = generate_etag
+    end
+  end
+
+  def generate_etag
+    Digest::MD5.hexdigest(response.body)
+  end
+end
+```
+
+## 5. Background Jobs for Heavy Processing
+
+Let's implement background jobs for heavy processing:
+
+```ruby
+# app/jobs/order_processing_job.rb
+class OrderProcessingJob < ApplicationJob
+  queue_as :default
+
+  def perform(order_id)
+    order = Order.find(order_id)
+    
+    # Process payment
+    payment_service = PaymentService.new(order, order.payment_method, order.payment_details)
+    payment_service.process_payment
+    
+    # Send confirmation email
+    OrderMailer.order_confirmation(order).deliver_later
+    
+    # Update inventory
+    order.order_items.each do |item|
+      item.product.update_stock(-item.quantity)
+    end
+    
+    # Generate invoice
+    InvoiceGenerationJob.perform_later(order_id)
+  end
+end
+
+# app/jobs/invoice_generation_job.rb
+class InvoiceGenerationJob < ApplicationJob
+  queue_as :default
+
+  def perform(order_id)
+    order = Order.find(order_id)
+    
+    # Generate PDF invoice
+    pdf = generate_invoice_pdf(order)
+    
+    # Store invoice
+    order.invoice.attach(
+      io: StringIO.new(pdf),
+      filename: "invoice_#{order.order_number}.pdf",
+      content_type: 'application/pdf'
+    )
+    
+    # Send invoice email
+    OrderMailer.invoice(order).deliver_later
+  end
+
+  private
+
+  def generate_invoice_pdf(order)
+    # Use a PDF generation gem like Prawn
+    # This is a simplified example
+    Prawn::Document.new do
+      text "Invoice ##{order.order_number}"
+      text "Date: #{order.created_at}"
+      text "Customer: #{order.user.full_name}"
+      # Add more invoice details
+    end.render
+  end
+end
+```
+
+Would you like me to continue with more advanced features like:
+1. API Rate Limiting
+2. Webhook System for External Services
+3. Real-time Notifications using ActionCable
+4. Advanced Search with Elasticsearch
+5. Multi-currency Support
+
+Or would you like to focus on testing any of the features we've implemented so far?
+
+
+I'll guide you through implementing more advanced features, starting with API Rate Limiting and Webhook System.
+
+## 1. API Rate Limiting
+
+Let's implement a sophisticated rate limiting system:
+
+```ruby
+# app/controllers/concerns/rate_limitable.rb
+module RateLimitable
+  extend ActiveSupport::Concern
+
+  included do
+    before_action :check_rate_limit
+  end
+
+  private
+
+  def check_rate_limit
+    return unless rate_limit_enabled?
+
+    key = rate_limit_key
+    limit = rate_limit_limit
+    period = rate_limit_period
+
+    current = redis.get(key).to_i
+    if current >= limit
+      render json: {
+        error: 'Rate limit exceeded',
+        retry_after: redis.ttl(key)
+      }, status: :too_many_requests
+    else
+      redis.incr(key)
+      redis.expire(key, period) if current.zero?
+    end
+  end
+
+  def rate_limit_key
+    "#{request.remote_ip}:#{controller_name}:#{action_name}"
+  end
+
+  def rate_limit_limit
+    Rails.application.config.rate_limit.default_limit
+  end
+
+  def rate_limit_period
+    Rails.application.config.rate_limit.default_period
+  end
+
+  def rate_limit_enabled?
+    Rails.application.config.rate_limit.enabled
+  end
+
+  def redis
+    @redis ||= Redis.new(url: Rails.application.config.redis_url)
+  end
+end
+
+# config/initializers/rate_limit.rb
+Rails.application.config.rate_limit = ActiveSupport::OrderedOptions.new
+Rails.application.config.rate_limit.enabled = true
+Rails.application.config.rate_limit.default_limit = 100
+Rails.application.config.rate_limit.default_period = 3600 # 1 hour
+
+# app/models/rate_limit.rb
+class RateLimit < ApplicationRecord
+  belongs_to :user, optional: true
+
+  validates :key, presence: true, uniqueness: true
+  validates :limit, numericality: { greater_than: 0 }
+  validates :period, numericality: { greater_than: 0 }
+
+  def exceeded?
+    current_count >= limit
+  end
+
+  def current_count
+    redis.get(key).to_i
+  end
+
+  def time_remaining
+    redis.ttl(key)
+  end
+
+  private
+
+  def redis
+    @redis ||= Redis.new(url: Rails.application.config.redis_url)
+  end
+end
+```
+
+## 2. Webhook System for External Services
+
+Let's implement a webhook system for external integrations:
+
+```ruby
+# app/models/webhook.rb
+class Webhook < ApplicationRecord
+  belongs_to :user
+
+  validates :url, presence: true, format: { with: URI::regexp }
+  validates :events, presence: true
+  validates :secret, presence: true
+
+  before_validation :generate_secret, on: :create
+
+  def deliver(event_type, payload)
+    WebhookDeliveryJob.perform_later(id, event_type, payload)
+  end
+
+  def verify_signature(payload, signature)
+    expected = OpenSSL::HMAC.hexdigest(
+      'sha256',
+      secret,
+      payload
+    )
+    ActiveSupport::SecurityUtils.secure_compare(signature, expected)
+  end
+
+  private
+
+  def generate_secret
+    self.secret = SecureRandom.hex(32)
+  end
+end
+
+# app/jobs/webhook_delivery_job.rb
+class WebhookDeliveryJob < ApplicationJob
+  queue_as :webhooks
+
+  retry_on StandardError, wait: :exponentially_longer, attempts: 3
+
+  def perform(webhook_id, event_type, payload)
+    webhook = Webhook.find(webhook_id)
+    
+    response = HTTParty.post(
+      webhook.url,
+      body: payload.to_json,
+      headers: {
+        'Content-Type' => 'application/json',
+        'X-Webhook-Event' => event_type,
+        'X-Webhook-Signature' => generate_signature(webhook, payload)
+      }
+    )
+
+    WebhookDelivery.create!(
+      webhook: webhook,
+      event_type: event_type,
+      payload: payload,
+      response_code: response.code,
+      response_body: response.body
+    )
+
+    raise "Webhook delivery failed: #{response.code}" unless response.success?
+  end
+
+  private
+
+  def generate_signature(webhook, payload)
+    OpenSSL::HMAC.hexdigest(
+      'sha256',
+      webhook.secret,
+      payload.to_json
+    )
+  end
+end
+
+# app/models/webhook_delivery.rb
+class WebhookDelivery < ApplicationRecord
+  belongs_to :webhook
+
+  validates :event_type, presence: true
+  validates :payload, presence: true
+  validates :response_code, presence: true
+
+  scope :successful, -> { where('response_code >= 200 AND response_code < 300') }
+  scope :failed, -> { where('response_code >= 400') }
+end
+```
+
+## 3. Real-time Notifications using ActionCable
+
+Let's implement real-time notifications:
+
+```ruby
+# app/channels/notifications_channel.rb
+class NotificationsChannel < ApplicationCable::Channel
+  def subscribed
+    stream_from "notifications_#{current_user.id}"
+  end
+
+  def unsubscribed
+    # Any cleanup needed when channel is unsubscribed
+  end
+end
+
+# app/models/notification.rb
+class Notification < ApplicationRecord
+  belongs_to :user
+  belongs_to :notifiable, polymorphic: true
+
+  validates :title, presence: true
+  validates :message, presence: true
+
+  after_create :broadcast_notification
+
+  scope :unread, -> { where(read_at: nil) }
+  scope :recent, -> { order(created_at: :desc) }
+
+  def mark_as_read
+    update(read_at: Time.current)
+  end
+
+  private
+
+  def broadcast_notification
+    ActionCable.server.broadcast(
+      "notifications_#{user_id}",
+      {
+        id: id,
+        title: title,
+        message: message,
+        created_at: created_at,
+        notifiable_type: notifiable_type,
+        notifiable_id: notifiable_id
+      }
+    )
+  end
+end
+
+# app/services/notification_service.rb
+class NotificationService
+  def initialize(user)
+    @user = user
+  end
+
+  def create_notification(title, message, notifiable = nil)
+    Notification.create!(
+      user: @user,
+      title: title,
+      message: message,
+      notifiable: notifiable
+    )
+  end
+
+  def mark_all_as_read
+    @user.notifications.unread.update_all(read_at: Time.current)
+  end
+
+  def unread_count
+    @user.notifications.unread.count
+  end
+end
+```
+
+## 4. Advanced Search with Elasticsearch
+
+Let's implement advanced search functionality:
+
+```ruby
+# app/models/concerns/searchable.rb
+module Searchable
+  extend ActiveSupport::Concern
+
+  included do
+    include Elasticsearch::Model
+    include Elasticsearch::Model::Callbacks
+
+    mapping do
+      indexes :id, type: 'integer'
+      indexes :name, type: 'text', analyzer: 'english'
+      indexes :description, type: 'text', analyzer: 'english'
+      indexes :price, type: 'float'
+      indexes :category_id, type: 'integer'
+      indexes :created_at, type: 'date'
+      indexes :updated_at, type: 'date'
+    end
+
+    def as_indexed_json(_options = {})
+      as_json(
+        only: [:id, :name, :description, :price, :category_id, :created_at, :updated_at]
+      )
+    end
+  end
+
+  class_methods do
+    def search(query, options = {})
+      search_definition = {
+        query: {
+          bool: {
+            must: [
+              {
+                multi_match: {
+                  query: query,
+                  fields: ['name^3', 'description'],
+                  fuzziness: 'AUTO'
+                }
+              }
+            ]
+          }
+        },
+        highlight: {
+          fields: {
+            name: {},
+            description: {}
+          }
+        }
+      }
+
+      if options[:filters].present?
+        search_definition[:query][:bool][:filter] = options[:filters]
+      end
+
+      if options[:sort].present?
+        search_definition[:sort] = options[:sort]
+      end
+
+      __elasticsearch__.search(search_definition)
+    end
+  end
+end
+
+# app/services/search_service.rb
+class SearchService
+  def initialize(query, options = {})
+    @query = query
+    @options = options
+  end
+
+  def call
+    {
+      products: search_products,
+      suggestions: generate_suggestions,
+      filters: available_filters
+    }
+  end
+
+  private
+
+  def search_products
+    Product.search(@query, build_search_options)
+  end
+
+  def generate_suggestions
+    # Implement search suggestions logic
+    # This could use Elasticsearch's suggest feature
+  end
+
+  def available_filters
+    {
+      categories: Category.all,
+      price_ranges: [
+        { min: 0, max: 50 },
+        { min: 50, max: 100 },
+        { min: 100, max: 200 },
+        { min: 200, max: nil }
+      ]
+    }
+  end
+
+  def build_search_options
+    options = {}
+    
+    if @options[:category_id].present?
+      options[:filters] = { term: { category_id: @options[:category_id] } }
+    end
+
+    if @options[:price_range].present?
+      options[:filters] = {
+        range: {
+          price: {
+            gte: @options[:price_range][:min],
+            lte: @options[:price_range][:max]
+          }
+        }
+      }
+    end
+
+    options
+  end
+end
+```
+
+## 5. Multi-currency Support
+
+Let's implement multi-currency support:
+
+```ruby
+# app/models/currency.rb
+class Currency < ApplicationRecord
+  validates :code, presence: true, uniqueness: true
+  validates :symbol, presence: true
+  validates :exchange_rate, numericality: { greater_than: 0 }
+
+  def self.default
+    find_by(code: 'USD') || first
+  end
+
+  def convert(amount, target_currency)
+    return amount if code == target_currency.code
+    
+    (amount * exchange_rate / target_currency.exchange_rate).round(2)
+  end
+end
+
+# app/models/concerns/priceable.rb
+module Priceable
+  extend ActiveSupport::Concern
+
+  included do
+    before_save :normalize_prices
+  end
+
+  def price_in(currency_code)
+    currency = Currency.find_by(code: currency_code)
+    return base_price unless currency
+    
+    currency.convert(base_price, Currency.default)
+  end
+
+  private
+
+  def normalize_prices
+    self.base_price = Currency.default.convert(base_price, Currency.default)
+  end
+end
+
+# app/services/currency_service.rb
+class CurrencyService
+  def initialize
+    @client = ExchangeRateClient.new
+  end
+
+  def update_exchange_rates
+    rates = @client.fetch_latest_rates
+    
+    Currency.find_each do |currency|
+      rate = rates[currency.code]
+      currency.update!(exchange_rate: rate) if rate
+    end
+  end
+
+  def convert(amount, from_currency, to_currency)
+    from = Currency.find_by(code: from_currency)
+    to = Currency.find_by(code: to_currency)
+    
+    return amount unless from && to
+    
+    from.convert(amount, to)
+  end
+end
+
+# app/jobs/update_exchange_rates_job.rb
+class UpdateExchangeRatesJob < ApplicationJob
+  queue_as :default
+
+  def perform
+    CurrencyService.new.update_exchange_rates
+  end
+end
+```
+
+Would you like me to continue with more advanced features like:
+1. Advanced Caching Strategies
+2. API Versioning
+3. GraphQL Implementation
+4. Microservices Architecture
+5. Containerization with Docker
+
+Or would you like to focus on testing any of the features we've implemented so far?
+
+
+I'll guide you through implementing more advanced features, starting with Advanced Caching Strategies and API Versioning.
+
+## 1. Advanced Caching Strategies
+
+Let's implement a sophisticated caching system with different strategies:
+
+```ruby
+# app/models/concerns/advanced_cacheable.rb
+module AdvancedCacheable
+  extend ActiveSupport::Concern
+
+  included do
+    after_commit :clear_advanced_cache
+  end
+
+  class_methods do
+    def cached_find(id, options = {})
+      cache_key = generate_cache_key(id, options)
+      Rails.cache.fetch(cache_key, expires_in: options[:expires_in] || 1.hour) do
+        includes(options[:includes]).find(id)
+      end
+    end
+
+    def cached_where(conditions, options = {})
+      cache_key = generate_cache_key(conditions, options)
+      Rails.cache.fetch(cache_key, expires_in: options[:expires_in] || 1.hour) do
+        includes(options[:includes]).where(conditions)
+      end
+    end
+
+    def cached_count(conditions = nil, options = {})
+      cache_key = generate_cache_key(['count', conditions], options)
+      Rails.cache.fetch(cache_key, expires_in: options[:expires_in] || 1.hour) do
+        where(conditions).count
+      end
+    end
+
+    private
+
+    def generate_cache_key(identifier, options)
+      [
+        name.underscore,
+        identifier,
+        options[:version],
+        options[:locale],
+        options[:user_id]
+      ].compact.join('/')
+    end
+  end
+
+  private
+
+  def clear_advanced_cache
+    # Clear specific caches
+    Rails.cache.delete_matched("#{self.class.name.underscore}/#{id}/*")
+    
+    # Clear related caches
+    self.class.reflect_on_all_associations.each do |association|
+      Rails.cache.delete_matched("#{association.klass.name.underscore}/*")
+    end
+  end
+end
+
+# app/services/cache_service.rb
+class CacheService
+  def initialize(model_class)
+    @model_class = model_class
+  end
+
+  def warm_cache(scope = :all)
+    @model_class.send(scope).find_each do |record|
+      Rails.cache.write(
+        record.cache_key,
+        record,
+        expires_in: 1.hour
+      )
+    end
+  end
+
+  def clear_cache(pattern = nil)
+    if pattern
+      Rails.cache.delete_matched(pattern)
+    else
+      Rails.cache.delete_matched("#{@model_class.name.underscore}/*")
+    end
+  end
+
+  def cache_stats
+    {
+      hits: Rails.cache.stats[:hits],
+      misses: Rails.cache.stats[:misses],
+      size: Rails.cache.stats[:size]
+    }
+  end
+end
+
+# app/jobs/cache_warming_job.rb
+class CacheWarmingJob < ApplicationJob
+  queue_as :low_priority
+
+  def perform(model_class, scope = :all)
+    CacheService.new(model_class).warm_cache(scope)
+  end
+end
+```
+
+## 2. API Versioning
+
+Let's implement a robust API versioning system:
+
+```ruby
+# app/controllers/api/base_controller.rb
+module Api
+  class BaseController < ApplicationController
+    include Api::Versioning
+    include Api::ErrorHandling
+
+    before_action :set_version
+    before_action :validate_version
+
+    private
+
+    def set_version
+      @version = request.headers['Accept'].match(/version=(\d+)/)&.captures&.first || '1'
+    end
+
+    def validate_version
+      unless valid_version?(@version)
+        render json: {
+          error: "Invalid API version. Available versions: #{available_versions.join(', ')}"
+        }, status: :bad_request
+      end
+    end
+  end
+end
+
+# app/controllers/concerns/api/versioning.rb
+module Api
+  module Versioning
+    extend ActiveSupport::Concern
+
+    def versioned_serializer(record)
+      "Api::V#{@version}::#{record.class.name}Serializer".constantize
+    rescue NameError
+      "Api::V1::#{record.class.name}Serializer".constantize
+    end
+
+    def versioned_controller
+      "Api::V#{@version}::#{controller_name.classify}Controller".constantize
+    rescue NameError
+      "Api::V1::#{controller_name.classify}Controller".constantize
+    end
+
+    private
+
+    def valid_version?(version)
+      available_versions.include?(version)
+    end
+
+    def available_versions
+      Rails.application.config.api_versions
+    end
+  end
+end
+
+# config/initializers/api_versioning.rb
+Rails.application.config.api_versions = ['1', '2']
+
+# app/controllers/api/v2/products_controller.rb
+module Api
+  module V2
+    class ProductsController < Api::BaseController
+      def index
+        @products = Product.includes(:category, :variants)
+                         .filter(filter_params)
+                         .sort(sort_params)
+                         .page(params[:page])
+                         .per(params[:per_page])
+
+        render json: @products, each_serializer: versioned_serializer(Product)
+      end
+
+      private
+
+      def filter_params
+        params.permit(:category_id, :min_price, :max_price, :in_stock)
+      end
+
+      def sort_params
+        params.permit(:sort_by, :sort_direction)
+      end
+    end
+  end
+end
+
+# app/serializers/api/v2/product_serializer.rb
+module Api
+  module V2
+    class ProductSerializer < ActiveModel::Serializer
+      attributes :id, :name, :description, :price, :stock_quantity
+      belongs_to :category
+      has_many :variants
+      
+      def price
+        object.price_in(current_user.currency)
+      end
+    end
+  end
+end
+```
+
+## 3. GraphQL Implementation
+
+Let's implement a GraphQL API:
+
+```ruby
+# app/graphql/types/base_object.rb
+module Types
+  class BaseObject < GraphQL::Schema::Object
+    field_class Types::BaseField
+  end
+end
+
+# app/graphql/types/product_type.rb
+module Types
+  class ProductType < Types::BaseObject
+    field :id, ID, null: false
+    field :name, String, null: false
+    field :description, String, null: true
+    field :price, Float, null: false
+    field :stock_quantity, Int, null: false
+    field :category, Types::CategoryType, null: true
+    field :variants, [Types::ProductVariantType], null: true
+    field :reviews, [Types::ReviewType], null: true
+    field :average_rating, Float, null: true
+
+    def price
+      object.price_in(context[:current_user].currency)
+    end
+  end
+end
+
+# app/graphql/mutations/create_product.rb
+module Mutations
+  class CreateProduct < Mutations::BaseMutation
+    argument :name, String, required: true
+    argument :description, String, required: false
+    argument :price, Float, required: true
+    argument :category_id, ID, required: true
+    argument :stock_quantity, Int, required: true
+
+    field :product, Types::ProductType, null: true
+    field :errors, [String], null: false
+
+    def resolve(**attributes)
+      authorize! :create, Product
+      
+      product = Product.new(attributes)
+      
+      if product.save
+        {
+          product: product,
+          errors: []
+        }
+      else
+        {
+          product: nil,
+          errors: product.errors.full_messages
+        }
+      end
+    end
+  end
+end
+
+# app/graphql/query_type.rb
+module Types
+  class QueryType < Types::BaseObject
+    field :products, [Types::ProductType], null: false do
+      argument :category_id, ID, required: false
+      argument :min_price, Float, required: false
+      argument :max_price, Float, required: false
+    end
+
+    field :product, Types::ProductType, null: true do
+      argument :id, ID, required: true
+    end
+
+    def products(**args)
+      Product.search(args)
+    end
+
+    def product(id:)
+      Product.find(id)
+    end
+  end
+end
+```
+
+## 4. Microservices Architecture
+
+Let's implement a microservices communication layer:
+
+```ruby
+# app/services/microservice_client.rb
+class MicroserviceClient
+  def initialize(service_name)
+    @service_name = service_name
+    @base_url = Rails.application.config.microservices[service_name]
+  end
+
+  def get(path, params = {})
+    request(:get, path, params)
+  end
+
+  def post(path, data = {})
+    request(:post, path, data)
+  end
+
+  private
+
+  def request(method, path, data = {})
+    response = connection.send(method) do |req|
+      req.url path
+      req.headers['Authorization'] = "Bearer #{generate_token}"
+      req.params = data if method == :get
+      req.body = data.to_json if method == :post
+    end
+
+    handle_response(response)
+  end
+
+  def connection
+    @connection ||= Faraday.new(url: @base_url) do |conn|
+      conn.request :json
+      conn.response :json
+      conn.adapter Faraday.default_adapter
+    end
+  end
+
+  def generate_token
+    JWT.encode(
+      {
+        service: 'ecommerce',
+        exp: 1.hour.from_now.to_i
+      },
+      Rails.application.credentials.jwt_secret
+    )
+  end
+
+  def handle_response(response)
+    case response.status
+    when 200..299
+      response.body
+    when 401
+      raise MicroserviceClient::UnauthorizedError
+    when 404
+      raise MicroserviceClient::NotFoundError
+    else
+      raise MicroserviceClient::Error, response.body['error']
+    end
+  end
+end
+
+# app/services/inventory_service.rb
+class InventoryService
+  def initialize
+    @client = MicroserviceClient.new('inventory')
+  end
+
+  def check_stock(product_id, quantity)
+    @client.get("/products/#{product_id}/stock", quantity: quantity)
+  end
+
+  def update_stock(product_id, quantity)
+    @client.post("/products/#{product_id}/stock", quantity: quantity)
+  end
+end
+
+# app/services/payment_service.rb
+class PaymentService
+  def initialize
+    @client = MicroserviceClient.new('payment')
+  end
+
+  def process_payment(order_id, amount, payment_method)
+    @client.post('/payments', {
+      order_id: order_id,
+      amount: amount,
+      payment_method: payment_method
+    })
+  end
+end
+```
+
+## 5. Containerization with Docker
+
+Let's set up Docker configuration:
+
+```dockerfile
+# Dockerfile
+FROM ruby:3.2.2
+
+# Install dependencies
+RUN apt-get update -qq && \
+    apt-get install -y build-essential libpq-dev nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Install gems
+COPY Gemfile* ./
+RUN bundle install
+
+# Copy application code
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Start server
+CMD ["rails", "server", "-b", "0.0.0.0"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/ecommerce_development
+      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=ecommerce_development
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+
+  sidekiq:
+    build: .
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/ecommerce_development
+      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      - app
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+Would you like me to continue with more advanced features like:
+1. Advanced Security Features
+2. Performance Monitoring
+3. A/B Testing Framework
+4. Feature Flags System
+5. Advanced Search with Elasticsearch
+
+Or would you like to focus on testing any of the features we've implemented so far?
+
+
+
+Excellent! Let's enhance our e-commerce platform by implementing these microservices architecture concepts. I'll guide you through setting up the core microservices and additional components.
+
+## 1. Microservices Setup
+
+First, let's create a directory structure for our microservices:
+
+```ruby
+# Directory Structure
+ecommerce-platform/
+├── api-gateway/
+├── user-service/
+├── product-service/
+├── cart-service/
+├── order-service/
+├── payment-service/
+├── notification-service/
+├── docker-compose.yml
+└── README.md
+```
+
+Let's start with the API Gateway configuration:
+
+```ruby
+# api-gateway/config/routes.rb
+Rails.application.routes.draw do
+  scope '/api' do
+    # User Service Routes
+    mount UserService::Engine, at: '/users'
+    
+    # Product Service Routes
+    mount ProductService::Engine, at: '/products'
+    
+    # Cart Service Routes
+    mount CartService::Engine, at: '/cart'
+    
+    # Order Service Routes
+    mount OrderService::Engine, at: '/orders'
+    
+    # Payment Service Routes
+    mount PaymentService::Engine, at: '/payments'
+  end
+end
+
+# api-gateway/app/controllers/api/base_controller.rb
+module Api
+  class BaseController < ApplicationController
+    include Api::ErrorHandling
+    include Api::Authentication
+    
+    before_action :authenticate_request
+    before_action :set_service_client
+    
+    private
+    
+    def set_service_client
+      @service_client = ServiceClient.new(request.headers['Authorization'])
+    end
+  end
+end
+```
+
+## 2. User Service Implementation
+
+```ruby
+# user-service/app/models/user.rb
+class User < ApplicationRecord
+  include JWT::Auth::Authenticatable
+  
+  has_secure_password
+  
+  validates :email, presence: true, uniqueness: true
+  validates :password, length: { minimum: 8 }
+  
+  has_one :profile
+  has_many :addresses
+  has_many :orders
+  
+  def generate_jwt
+    JWT.encode(
+      {
+        user_id: id,
+        exp: 24.hours.from_now.to_i
+      },
+      Rails.application.credentials.jwt_secret
+    )
+  end
+end
+
+# user-service/app/controllers/api/v1/users_controller.rb
+module Api
+  module V1
+    class UsersController < ApplicationController
+      def create
+        @user = User.new(user_params)
+        
+        if @user.save
+          render json: {
+            user: UserSerializer.new(@user),
+            token: @user.generate_jwt
+          }, status: :created
+        else
+          render json: { errors: @user.errors.full_messages },
+                 status: :unprocessable_entity
+        end
+      end
+      
+      private
+      
+      def user_params
+        params.require(:user).permit(
+          :email,
+          :password,
+          :first_name,
+          :last_name
+        )
+      end
+    end
+  end
+end
+```
+
+## 3. Product Service Implementation
+
+```ruby
+# product-service/app/models/product.rb
+class Product < ApplicationRecord
+  include Elasticsearch::Model
+  include Elasticsearch::Model::Callbacks
+  
+  belongs_to :category
+  has_many :variants
+  has_many :reviews
+  
+  validates :name, presence: true
+  validates :price, numericality: { greater_than: 0 }
+  
+  mapping do
+    indexes :name, type: 'text'
+    indexes :description, type: 'text'
+    indexes :price, type: 'float'
+    indexes :category_id, type: 'integer'
+  end
+end
+
+# product-service/app/controllers/api/v1/products_controller.rb
+module Api
+  module V1
+    class ProductsController < ApplicationController
+      def index
+        @products = Product.search(
+          query: {
+            bool: {
+              must: [
+                {
+                  multi_match: {
+                    query: params[:query],
+                    fields: ['name^3', 'description']
+                  }
+                }
+              ],
+              filter: filter_params
+            }
+          }
+        )
+        
+        render json: @products, each_serializer: ProductSerializer
+      end
+    end
+  end
+end
+```
+
+## 4. Cart Service Implementation
+
+```ruby
+# cart-service/app/models/cart.rb
+class Cart < ApplicationRecord
+  belongs_to :user
+  has_many :cart_items
+  
+  def add_item(product_id, quantity = 1)
+    cart_item = cart_items.find_or_initialize_by(product_id: product_id)
+    
+    with_lock do
+      if cart_item.new_record?
+        cart_item.quantity = quantity
+      else
+        cart_item.quantity += quantity
+      end
+      
+      cart_item.save!
+    end
+  end
+  
+  def total_price
+    cart_items.sum { |item| item.quantity * item.unit_price }
+  end
+end
+
+# cart-service/app/controllers/api/v1/cart_items_controller.rb
+module Api
+  module V1
+    class CartItemsController < ApplicationController
+      def create
+        @cart_item = current_cart.cart_items.new(cart_item_params)
+        
+        if @cart_item.save
+          render json: @cart_item, status: :created
+        else
+          render json: { errors: @cart_item.errors.full_messages },
+                 status: :unprocessable_entity
+        end
+      end
+    end
+  end
+end
+```
+
+## 5. Order Service Implementation
+
+```ruby
+# order-service/app/models/order.rb
+class Order < ApplicationRecord
+  include AASM
+  
+  belongs_to :user
+  belongs_to :shipping_address, class_name: 'Address'
+  belongs_to :billing_address, class_name: 'Address'
+  has_many :order_items
+  
+  aasm column: :status do
+    state :pending, initial: true
+    state :processing
+    state :shipped
+    state :delivered
+    state :cancelled
+    
+    event :process do
+      transitions from: :pending, to: :processing
+    end
+    
+    event :ship do
+      transitions from: :processing, to: :shipped
+    end
+    
+    event :deliver do
+      transitions from: :shipped, to: :delivered
+    end
+    
+    event :cancel do
+      transitions from: [:pending, :processing], to: :cancelled
+    end
+  end
+end
+
+# order-service/app/controllers/api/v1/orders_controller.rb
+module Api
+  module V1
+    class OrdersController < ApplicationController
+      def create
+        @order = current_user.orders.new(order_params)
+        
+        if @order.save
+          # Notify payment service
+          PaymentService.new(@order).process_payment
+          
+          render json: @order, status: :created
+        else
+          render json: { errors: @order.errors.full_messages },
+                 status: :unprocessable_entity
+        end
+      end
+    end
+  end
+end
+```
+
+## 6. Docker Configuration
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/api_gateway
+    depends_on:
+      - db
+      - redis
+
+  user-service:
+    build: ./user-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/user_service
+    depends_on:
+      - db
+
+  product-service:
+    build: ./product-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/product_service
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      - db
+      - elasticsearch
+
+  cart-service:
+    build: ./cart-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/cart_service
+      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      - db
+      - redis
+
+  order-service:
+    build: ./order-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/order_service
+    depends_on:
+      - db
+      - redis
+
+  payment-service:
+    build: ./payment-service
+    environment:
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    depends_on:
+      - redis
+
+  notification-service:
+    build: ./notification-service
+    environment:
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+    depends_on:
+      - redis
+
+  db:
+    image: postgres:14
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=password
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+```
+
+## 7. Service Discovery with Consul
+
+```ruby
+# config/initializers/consul.rb
+require 'diplomat'
+
+Diplomat.configure do |config|
+  config.url = ENV['CONSUL_URL'] || 'http://consul:8500'
+end
+
+# app/services/service_discovery.rb
+class ServiceDiscovery
+  def self.register_service(service_name, port)
+    Diplomat::Service.register(
+      name: service_name,
+      port: port,
+      tags: ['rails', 'api'],
+      check: {
+        http: "http://localhost:#{port}/health",
+        interval: '10s',
+        timeout: '5s'
+      }
+    )
+  end
+
+  def self.discover_service(service_name)
+    Diplomat::Service.get(service_name)
+  end
+end
+```
+
+Would you like me to continue with:
+1. Setting up the CI/CD pipeline
+2. Implementing centralized logging with ELK stack
+3. Adding monitoring with Prometheus and Grafana
+4. Implementing the notification service with SendGrid
+5. Setting up the payment service with Stripe
+
+Or would you like to focus on any specific aspect of the microservices architecture?
+
+
+I'll guide you through implementing all five components. Let's start with each one systematically.
+
+## 1. CI/CD Pipeline Setup
+
+First, let's set up GitHub Actions for our CI/CD pipeline:
+
+```yaml
+# .github/workflows/main.yml
+name: E-commerce Platform CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.2.2'
+        bundler-cache: true
+        
+    - name: Install dependencies
+      run: bundle install
+      
+    - name: Setup database
+      env:
+        RAILS_ENV: test
+        DATABASE_URL: postgres://postgres:password@localhost:5432/ecommerce_test
+      run: |
+        bundle exec rails db:create
+        bundle exec rails db:schema:load
+        
+    - name: Run tests
+      env:
+        RAILS_ENV: test
+        DATABASE_URL: postgres://postgres:password@localhost:5432/ecommerce_test
+      run: bundle exec rspec
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+      
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Build and push
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce:${{ github.sha }}
+```
+
+## 2. Centralized Logging with ELK Stack
+
+Let's set up the ELK stack for centralized logging:
+
+```yaml
+# docker-compose.logging.yml
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.0
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+    ports:
+      - "5000:5000"
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+
+volumes:
+  elasticsearch_data:
+```
+
+```ruby
+# config/initializers/logging.rb
+require 'logstash-logger'
+
+Rails.application.configure do
+  config.logger = LogStashLogger.new(
+    type: :tcp,
+    host: ENV['LOGSTASH_HOST'] || 'logstash',
+    port: ENV['LOGSTASH_PORT'] || 5000
+  )
+end
+
+# app/controllers/concerns/loggable.rb
+module Loggable
+  extend ActiveSupport::Concern
+
+  included do
+    around_action :log_request
+  end
+
+  private
+
+  def log_request
+    start_time = Time.current
+    yield
+    duration = Time.current - start_time
+
+    log_data = {
+      timestamp: Time.current,
+      service: Rails.application.class.module_parent_name,
+      request_id: request.request_id,
+      method: request.method,
+      path: request.path,
+      params: request.params.except('controller', 'action'),
+      status: response.status,
+      duration: duration,
+      user_id: current_user&.id
+    }
+
+    Rails.logger.info(log_data)
+  end
+end
+```
+
+## 3. Monitoring with Prometheus and Grafana
+
+Let's set up monitoring:
+
+```yaml
+# docker-compose.monitoring.yml
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  grafana_data:
+```
+
+```ruby
+# config/initializers/prometheus.rb
+require 'prometheus/middleware/collector'
+require 'prometheus/middleware/exporter'
+
+Rails.application.middleware.use Prometheus::Middleware::Collector
+Rails.application.middleware.use Prometheus::Middleware::Exporter
+
+# app/controllers/concerns/metrics.rb
+module Metrics
+  extend ActiveSupport::Concern
+
+  included do
+    before_action :record_request_metrics
+    after_action :record_response_metrics
+  end
+
+  private
+
+  def record_request_metrics
+    @request_start_time = Time.current
+  end
+
+  def record_response_metrics
+    duration = Time.current - @request_start_time
+    
+    Prometheus::Client.registry.get(:http_request_duration_seconds)
+      .observe(duration, labels: {
+        method: request.method,
+        path: request.path,
+        status: response.status
+      })
+  end
+end
+```
+
+## 4. Notification Service with SendGrid
+
+Let's implement the notification service:
+
+```ruby
+# notification-service/app/services/notification_service.rb
+class NotificationService
+  def initialize
+    @client = SendGrid::API.new(api_key: ENV['SENDGRID_API_KEY'])
+  end
+
+  def send_email(to, template_id, data)
+    mail = SendGrid::Mail.new
+    mail.from = SendGrid::Email.new(email: 'noreply@ecommerce.com')
+    mail.template_id = template_id
+    
+    personalization = SendGrid::Personalization.new
+    personalization.add_to(SendGrid::Email.new(email: to))
+    personalization.add_dynamic_template_data(data)
+    mail.add_personalization(personalization)
+    
+    @client.client.mail._('send').post(request_body: mail.to_json)
+  end
+
+  def send_sms(to, message)
+    client = Twilio::REST::Client.new(
+      ENV['TWILIO_ACCOUNT_SID'],
+      ENV['TWILIO_AUTH_TOKEN']
+    )
+    
+    client.messages.create(
+      from: ENV['TWILIO_PHONE_NUMBER'],
+      to: to,
+      body: message
+    )
+  end
+end
+
+# notification-service/app/jobs/notification_job.rb
+class NotificationJob < ApplicationJob
+  queue_as :notifications
+
+  def perform(notification_type, recipient, data)
+    case notification_type
+    when :order_confirmation
+      send_order_confirmation(recipient, data)
+    when :shipping_update
+      send_shipping_update(recipient, data)
+    when :payment_received
+      send_payment_confirmation(recipient, data)
+    end
+  end
+
+  private
+
+  def send_order_confirmation(recipient, data)
+    NotificationService.new.send_email(
+      recipient,
+      'order_confirmation_template_id',
+      {
+        order_number: data[:order_number],
+        total_amount: data[:total_amount],
+        items: data[:items]
+      }
+    )
+  end
+
+  def send_shipping_update(recipient, data)
+    NotificationService.new.send_email(
+      recipient,
+      'shipping_update_template_id',
+      {
+        order_number: data[:order_number],
+        tracking_number: data[:tracking_number],
+        status: data[:status]
+      }
+    )
+  end
+
+  def send_payment_confirmation(recipient, data)
+    NotificationService.new.send_email(
+      recipient,
+      'payment_confirmation_template_id',
+      {
+        order_number: data[:order_number],
+        amount: data[:amount],
+        payment_method: data[:payment_method]
+      }
+    )
+  end
+end
+```
+
+## 5. Payment Service with Stripe
+
+Let's implement the payment service:
+
+```ruby
+# payment-service/app/services/stripe_service.rb
+class StripeService
+  def initialize
+    Stripe.api_key = ENV['STRIPE_SECRET_KEY']
+  end
+
+  def create_payment_intent(amount, currency, metadata = {})
+    Stripe::PaymentIntent.create(
+      amount: amount,
+      currency: currency,
+      metadata: metadata,
+      automatic_payment_methods: {
+        enabled: true
+      }
+    )
+  end
+
+  def create_customer(email, payment_method_id)
+    customer = Stripe::Customer.create(
+      email: email,
+      payment_method: payment_method_id
+    )
+    
+    Stripe::PaymentMethod.attach(
+      payment_method_id,
+      customer: customer.id
+    )
+    
+    customer
+  end
+
+  def process_payment(payment_intent_id)
+    payment_intent = Stripe::PaymentIntent.confirm(payment_intent_id)
+    
+    if payment_intent.status == 'succeeded'
+      {
+        success: true,
+        payment_id: payment_intent.id,
+        amount: payment_intent.amount,
+        currency: payment_intent.currency
+      }
+    else
+      {
+        success: false,
+        error: payment_intent.last_payment_error&.message
+      }
+    end
+  end
+end
+
+# payment-service/app/controllers/api/v1/payments_controller.rb
+module Api
+  module V1
+    class PaymentsController < ApplicationController
+      def create
+        payment_intent = stripe_service.create_payment_intent(
+          params[:amount],
+          params[:currency],
+          params[:metadata]
+        )
+        
+        render json: {
+          client_secret: payment_intent.client_secret
+        }
+      end
+
+      def confirm
+        result = stripe_service.process_payment(params[:payment_intent_id])
+        
+        if result[:success]
+          # Notify order service
+          OrderService.new.update_payment_status(
+            result[:payment_id],
+            'completed'
+          )
+          
+          render json: { status: 'success' }
+        else
+          render json: { error: result[:error] }, status: :unprocessable_entity
+        end
+      end
+
+      private
+
+      def stripe_service
+        @stripe_service ||= StripeService.new
+      end
+    end
+  end
+end
+```
+
+## Integration of All Services
+
+Let's create a service orchestration layer:
+
+```ruby
+# api-gateway/app/services/orchestration_service.rb
+class OrchestrationService
+  def initialize(order_id)
+    @order = Order.find(order_id)
+  end
+
+  def process_order
+    # 1. Validate order
+    validate_order
+    
+    # 2. Process payment
+    payment_result = process_payment
+    
+    # 3. Update inventory
+    update_inventory if payment_result[:success]
+    
+    # 4. Send notifications
+    send_notifications(payment_result)
+    
+    # 5. Log the transaction
+    log_transaction(payment_result)
+  end
+
+  private
+
+  def validate_order
+    OrderValidationService.new(@order).validate
+  end
+
+  def process_payment
+    PaymentService.new.process_payment(@order)
+  end
+
+  def update_inventory
+    InventoryService.new.update_stock(@order)
+  end
+
+  def send_notifications(payment_result)
+    NotificationService.new.send_order_confirmation(@order, payment_result)
+  end
+
+  def log_transaction(payment_result)
+    TransactionLogService.new.log(@order, payment_result)
+  end
+end
+```
+
+Would you like me to:
+1. Add more detailed error handling and retry mechanisms
+2. Implement circuit breakers for service resilience
+3. Add API documentation with Swagger/OpenAPI
+4. Implement rate limiting and throttling
+5. Add security features like JWT validation and API key management
+
+Or would you like to focus on any specific aspect of these implementations?
+
+
+Absolutely! I can help you set up a local development environment for your e-commerce platform, including all the advanced features and CI/CD pipeline, so you can work offline. Here’s a step-by-step guide to get everything running on your local machine.
+
+### Local Development Environment Setup
+
+#### 1. Prerequisites
+
+Make sure you have the following installed on your laptop:
+
+- **Docker**: For containerization of services.
+- **Docker Compose**: To manage multi-container applications.
+- **Ruby**: For the Rails application (if you want to run it outside of Docker).
+- **PostgreSQL**: For the database (if not using Docker).
+- **Redis**: For caching (if not using Docker).
+- **Node.js**: For JavaScript runtime (if needed for asset compilation).
+
+#### 2. Directory Structure
+
+Create a directory for your e-commerce platform:
+
+```bash
+mkdir ecommerce-platform
+cd ecommerce-platform
+```
+
+Inside this directory, create subdirectories for each service:
+
+```bash
+mkdir api-gateway user-service product-service cart-service order-service payment-service notification-service
+```
+
+#### 3. Docker Configuration
+
+Create a `docker-compose.yml` file in the root of your `ecommerce-platform` directory:
+
+```yaml
+version: '3.8'
+
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - user-service
+      - product-service
+      - cart-service
+      - order-service
+      - payment-service
+      - notification-service
+
+  user-service:
+    build: ./user-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/user_service
+    depends_on:
+      - db
+
+  product-service:
+    build: ./product-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/product_service
+    depends_on:
+      - db
+
+  cart-service:
+    build: ./cart-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/cart_service
+    depends_on:
+      - db
+
+  order-service:
+    build: ./order-service
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/order_service
+    depends_on:
+      - db
+
+  payment-service:
+    build: ./payment-service
+    environment:
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+    depends_on:
+      - redis
+
+  notification-service:
+    build: ./notification-service
+    environment:
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+    depends_on:
+      - redis
+
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+#### 4. Service Configuration
+
+Each service should have its own `Dockerfile`. Here’s an example for the `user-service`:
+
+```dockerfile
+# user-service/Dockerfile
+FROM ruby:3.2.2
+
+# Install dependencies
+RUN apt-get update -qq && \
+    apt-get install -y build-essential libpq-dev nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Install gems
+COPY Gemfile* ./
+RUN bundle install
+
+# Copy application code
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Start server
+CMD ["rails", "server", "-b", "0.0.0.0"]
+```
+
+Repeat this for each service, adjusting the `Dockerfile` as necessary.
+
+#### 5. CI/CD Pipeline Setup
+
+For local CI/CD, you can use GitHub Actions, but since you want to work offline, consider using a local CI tool like **GitLab CI** or **Jenkins**. Here’s how to set up a simple GitLab CI configuration:
+
+1. **Install GitLab Runner** on your local machine.
+2. Create a `.gitlab-ci.yml` file in the root of your project:
+
+```yaml
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  script:
+    - docker-compose up -d db
+    - docker-compose run api-gateway bundle exec rspec
+  services:
+    - postgres:14
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying to local environment..."
+```
+
+#### 6. Running the Application
+
+To run your application locally, use the following command:
+
+```bash
+docker-compose up --build
+```
+
+This command will build and start all your services. You can access the API Gateway at `http://localhost:3000`.
+
+#### 7. Testing the Application
+
+You can run tests for each service using:
+
+```bash
+docker-compose run user-service bundle exec rspec
+```
+
+Repeat this for each service as needed.
+
+#### 8. Advanced Features Implementation
+
+Now, you can implement the advanced features we discussed earlier:
+
+1. **Advanced Error Handling**: Implement custom error classes and middleware for handling errors gracefully.
+2. **Circuit Breakers**: Use a gem like `circuitbox` to implement circuit breakers for external service calls.
+3. **API Documentation**: Use Swagger or OpenAPI to document your API endpoints.
+4. **Rate Limiting**: Implement rate limiting using middleware or a gem like `rack-attack`.
+5. **Security Features**: Implement JWT validation, API key management, and secure your endpoints.
+
+### Final Steps
+
+1. **Testing**: Ensure all features are thoroughly tested.
+2. **Documentation**: Document your setup and usage instructions in a `README.md` file.
+3. **Backup**: Regularly back up your database and important files.
+
+### Example README.md
+
+```markdown
+# E-commerce Platform
+
+## Setup Instructions
+
+1. Clone the repository.
+2. Navigate to the project directory.
+3. Run `docker-compose up --build` to start the application.
+4. Access the API Gateway at `http://localhost:3000`.
+
+## Running Tests
+
+To run tests for a specific service, use:
+
+```bash
+docker-compose run user-service bundle exec rspec
+```
+
+## CI/CD
+
+This project includes a CI/CD pipeline using GitLab CI. Ensure you have GitLab Runner installed locally.
+
+## Advanced Features
+
+- Rate Limiting
+- Circuit Breakers
+- API Documentation
+- Security Features
+```
+
+This setup will allow you to work on your e-commerce platform locally, including all advanced features and CI/CD capabilities. If you have any specific questions or need further assistance with any part of the setup, feel free to ask!
+
+
 Yes, we can perform integration testing using curl commands. I'll provide a comprehensive set of curl commands to test various endpoints of your e-commerce API:
 
 ### 1. Authentication Endpoints
