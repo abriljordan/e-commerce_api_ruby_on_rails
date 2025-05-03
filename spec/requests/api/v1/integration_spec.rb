@@ -20,12 +20,36 @@ RSpec.describe 'E-commerce API Integration', type: :request do
       expect(json_response).to include('access_token', 'refresh_token')
 
       # 2. Add product to cart
-      post '/api/v1/cart_items', params: {
+      cart_item_params = {
         cart_item: {
+          product_id: product.id,
           product_variant_id: product_variant.id,
           quantity: 2
         }
-      }, headers: auth_headers
+      }
+      
+      puts "\nBefore cart item creation:"
+      puts "Auth headers: #{auth_headers.inspect}"
+      puts "User cart: #{user.cart.inspect}"
+      
+      post '/api/v1/cart_items', params: cart_item_params, headers: auth_headers
+      
+      puts "\nAfter cart item creation:"
+      puts "Response status: #{response.status}"
+      puts "Response body: #{response.body}"
+      puts "Cart item params: #{cart_item_params.inspect}"
+      puts "Product exists? #{Product.exists?(product.id)}"
+      puts "Product variant exists? #{ProductVariant.exists?(product_variant.id)}"
+      puts "Cart exists? #{Cart.exists?(user.cart.id)}"
+      puts "Current user cart items: #{user.cart.cart_items.reload.to_json}"
+      
+      # Try to create cart item manually to see validation errors
+      cart_item = user.cart.cart_items.new(cart_item_params[:cart_item])
+      if !cart_item.valid?
+        puts "\nValidation errors:"
+        puts cart_item.errors.full_messages
+      end
+      
       expect(response).to have_http_status(:created)
       cart_item = json_response
       expect(cart_item['quantity']).to eq(2)

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_05_03_053137) do
+ActiveRecord::Schema[8.0].define(version: 2025_03_18_115948) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -60,13 +60,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_03_053137) do
   create_table "cart_items", force: :cascade do |t|
     t.bigint "cart_id", null: false
     t.bigint "product_id", null: false
-    t.bigint "product_sku_id", null: false
+    t.bigint "product_variant_id", null: false
     t.integer "quantity"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["cart_id"], name: "index_cart_items_on_cart_id"
     t.index ["product_id"], name: "index_cart_items_on_product_id"
-    t.index ["product_sku_id"], name: "index_cart_items_on_product_sku_id"
+    t.index ["product_variant_id"], name: "index_cart_items_on_product_variant_id"
   end
 
   create_table "carts", force: :cascade do |t|
@@ -222,7 +222,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_03_053137) do
     t.bigint "category_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "sub_category_id"
     t.boolean "active", default: true
     t.boolean "featured", default: false
     t.integer "stock_quantity", default: 0
@@ -230,6 +229,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_03_053137) do
     t.decimal "average_rating", precision: 3, scale: 2
     t.integer "review_count", default: 0
     t.jsonb "metadata", default: {}
+    t.bigint "sub_category_id"
     t.index ["active"], name: "index_products_on_active"
     t.index ["average_rating"], name: "index_products_on_average_rating"
     t.index ["category_id"], name: "index_products_on_category_id"
@@ -258,8 +258,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_03_053137) do
     t.string "phone_number"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "role", default: 0
     t.string "jti"
+    t.integer "role", default: 0
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["jti"], name: "index_users_on_jti", unique: true
     t.index ["role"], name: "index_users_on_role"
@@ -280,7 +280,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_05_03_053137) do
   add_foreign_key "addresses", "cities"
   add_foreign_key "addresses", "users"
   add_foreign_key "cart_items", "carts"
-  add_foreign_key "cart_items", "product_skus"
+  add_foreign_key "cart_items", "product_variants"
   add_foreign_key "cart_items", "products"
   add_foreign_key "carts", "users"
   add_foreign_key "cities", "countries"
