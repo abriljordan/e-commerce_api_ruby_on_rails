@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta content='text/html; charset=UTF-8' http-equiv='Content-Type' />
+  </head>
+  <body>
+    <h1>Review Status Update</h1>
+    <p>Your review for <%= @product.name %> has been <%= @review.approved ? 'approved' : 'rejected' %>.</p>
+    
+    <h2>Review Details</h2>
+    <p><strong>Rating:</strong> <%= @review.rating %>/5</p>
+    <p><strong>Title:</strong> <%= @review.title %></p>
+    <p><strong>Content:</strong></p>
+    <p><%= @review.content %></p>
+    
+    <% if @review.approved %>
+      <p>Your review is now visible to other users. Thank you for your contribution!</p>
+    <% else %>
+      <p>Your review did not meet our guidelines. Please review our review policy and submit a new review if you wish.</p>
+    <% end %>
+    
+    <p>Best regards,<br>The E-commerce Team</p>
+  </body>
+</html> 

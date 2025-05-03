@@ -1,0 +1,31 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  avatar: "https://example.com/avatars/user1.jpg"
+  first_name: "Alice"
+  last_name: "Smith"
+  username: "alice_smith"
+  email: "alice@example.com"
+  password_digest: "<%= BCrypt::Password.create('password123') %>"
+  birth_of_date: 1995-06-22
+  phone_number: "123-456-7890"
+
+two:
+  avatar: "https://example.com/avatars/user2.jpg"
+  first_name: "Bob"
+  last_name: "Johnson"
+  username: "bob_j"
+  email: "bob@example.com"
+  password_digest: "<%= BCrypt::Password.create('securepass') %>"
+  birth_of_date: 1988-11-03
+  phone_number: "987-654-3210"
+
+three:
+  avatar: "https://example.com/avatars/user3.jpg"
+  first_name: "Charlie"
+  last_name: "Brown"
+  username: "charlie_b"
+  email: "charlie@example.com"
+  password_digest: "<%= BCrypt::Password.create('testpassword') %>"
+  birth_of_date: 2000-04-15
+  phone_number: "555-123-4567"

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta content='text/html; charset=UTF-8' http-equiv='Content-Type' />
+  </head>
+  <body>
+    <h1>New Review Notification</h1>
+    <p>A new review has been submitted for the product: <%= @product.name %></p>
+    
+    <h2>Review Details</h2>
+    <p><strong>User:</strong> <%= @user.full_name %></p>
+    <p><strong>Rating:</strong> <%= @review.rating %>/5</p>
+    <p><strong>Title:</strong> <%= @review.title %></p>
+    <p><strong>Content:</strong></p>
+    <p><%= @review.content %></p>
+    
+    <p>Please review this submission and take appropriate action.</p>
+    
+    <p>Best regards,<br>The E-commerce Team</p>
+  </body>
+</html> 
