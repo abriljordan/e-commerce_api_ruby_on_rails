@@ -1,7 +1,8 @@
 module Api
   module V1
-    class AuthenticationController < BaseController
-      skip_before_action :authenticate_user, only: [:login, :register, :refresh]
+    class AuthenticationController < ApplicationController
+      include Authentication
+      skip_before_action :authenticate_user!, only: [:login, :register, :refresh]
 
       def login
         user = User.find_by(email: params[:email])

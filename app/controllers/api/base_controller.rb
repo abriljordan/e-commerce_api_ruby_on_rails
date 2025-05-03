@@ -10,9 +10,14 @@ module Api
     private
 
     def authenticate_user
-      authenticate_or_request_with_http_token do |token, _options|
-        @current_user = User.find_by(api_token: token)
-      end
+      token = request.headers['Authorization']&.split(' ')&.last
+      return unauthorized unless token
+
+      decoded = JsonWebToken.decode(token)
+      return unauthorized unless decoded && decoded[:user_id]
+
+      @current_user = User.find_by(id: decoded[:user_id])
+      unauthorized unless @current_user
     end
 
     def current_user
