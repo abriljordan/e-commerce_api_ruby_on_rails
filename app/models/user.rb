@@ -17,7 +17,7 @@ class User < ApplicationRecord
                                message: "must include at least one lowercase letter, one uppercase letter, and one digit" }
   validates :phone_number, format: { with: /\A\+?[\d\s-]+\z/ }, allow_blank: true
 
-  enum role: { customer: 0, admin: 1 }
+  enum :role, { customer: 0, admin: 1 }, default: :customer
 
   before_create :set_default_role
   after_create :create_cart

@@ -7,7 +7,7 @@ module Api
         user = User.find_by(email: params[:email])
         
         if user&.authenticate(params[:password])
-          token = generate_token(user)
+          token = JsonWebToken.encode(user_id: user.id)
           render json: {
             token: token,
             user: {
@@ -26,7 +26,7 @@ module Api
         user = User.new(user_params)
         
         if user.save
-          token = generate_token(user)
+          token = JsonWebToken.encode(user_id: user.id)
           render json: {
             token: token,
             user: {
@@ -42,7 +42,6 @@ module Api
       end
 
       def logout
-        current_user.update(api_token: nil)
         head :no_content
       end
 
@@ -58,12 +57,6 @@ module Api
           :last_name,
           :phone_number
         )
-      end
-
-      def generate_token(user)
-        token = SecureRandom.hex(32)
-        user.update(api_token: token)
-        token
       end
     end
   end

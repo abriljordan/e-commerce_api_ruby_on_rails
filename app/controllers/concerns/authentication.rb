@@ -2,7 +2,11 @@ module Authentication
   extend ActiveSupport::Concern
 
   included do
-    before_action :authenticate_user!
+    before_action :authenticate_user!, unless: :skip_authentication?
+  end
+
+  def skip_authentication?
+    controller_name == 'authentication' && ['login', 'register'].include?(action_name)
   end
 
   def authenticate_user!

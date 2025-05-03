@@ -1,15 +1,33 @@
 class UpdateProductsTable < ActiveRecord::Migration[7.1]
   def change
-    rename_column :products, :price, :base_price
-    add_column :products, :active, :boolean, default: true
-    add_column :products, :featured, :boolean, default: false
-    add_column :products, :average_rating, :decimal, precision: 3, scale: 2
-    add_column :products, :review_count, :integer, default: 0
-    add_column :products, :metadata, :jsonb, default: {}
+    # Add base_price if it doesn't exist
+    unless column_exists?(:products, :base_price)
+      add_column :products, :base_price, :decimal, precision: 10, scale: 2, null: false
+    end
+
+    # Add featured if it doesn't exist
+    unless column_exists?(:products, :featured)
+      add_column :products, :featured, :boolean, default: false
+    end
+
+    # Add average_rating if it doesn't exist
+    unless column_exists?(:products, :average_rating)
+      add_column :products, :average_rating, :decimal, precision: 3, scale: 2
+    end
+
+    # Add review_count if it doesn't exist
+    unless column_exists?(:products, :review_count)
+      add_column :products, :review_count, :integer, default: 0
+    end
+
+    # Add metadata if it doesn't exist
+    unless column_exists?(:products, :metadata)
+      add_column :products, :metadata, :jsonb, default: {}
+    end
     
-    add_index :products, :active
-    add_index :products, :featured
-    add_index :products, :average_rating
-    add_index :products, :metadata, using: :gin
+    # Add indexes if they don't exist
+    add_index :products, :featured unless index_exists?(:products, :featured)
+    add_index :products, :average_rating unless index_exists?(:products, :average_rating)
+    add_index :products, :metadata, using: :gin unless index_exists?(:products, :metadata, using: :gin)
   end
 end 

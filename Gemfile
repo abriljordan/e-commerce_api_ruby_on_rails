@@ -47,6 +47,9 @@ gem 'aasm'
 # Rate limiting
 gem 'rack-attack'
 
+# JWT Authentication
+gem 'jwt'
+
 # API Documentation
 gem 'rswag'
 

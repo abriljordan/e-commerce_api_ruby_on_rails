@@ -1,17 +1,16 @@
 class AddReviewColumns < ActiveRecord::Migration[7.1]
   def change
-    add_column :products, :average_rating, :decimal, precision: 3, scale: 2, default: 0
-    add_column :products, :review_count, :integer, default: 0
-    add_column :products, :metadata, :jsonb, default: {}
+    # Add columns to product_reviews table if they don't exist
+    unless column_exists?(:product_reviews, :approved)
+      add_column :product_reviews, :approved, :boolean, default: false
+    end
+
+    unless column_exists?(:product_reviews, :metadata)
+      add_column :product_reviews, :metadata, :jsonb, default: {}
+    end
     
-    add_column :product_reviews, :approved, :boolean, default: false
-    add_column :product_reviews, :metadata, :jsonb, default: {}
-    
-    add_index :products, :average_rating
-    add_index :products, :review_count
-    add_index :products, :metadata, using: :gin
-    
-    add_index :product_reviews, :approved
-    add_index :product_reviews, :metadata, using: :gin
+    # Add indexes if they don't exist
+    add_index :product_reviews, :approved unless index_exists?(:product_reviews, :approved)
+    add_index :product_reviews, :metadata, using: :gin unless index_exists?(:product_reviews, :metadata, using: :gin)
   end
 end 

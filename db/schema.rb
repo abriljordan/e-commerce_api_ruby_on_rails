@@ -81,6 +81,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_03_21_091800) do
     t.index ["user_id"], name: "index_order_details_on_user_id"
   end
 
+  create_table "order_histories", force: :cascade do |t|
+    t.bigint "order_id", null: false
+    t.bigint "user_id"
+    t.string "status", null: false
+    t.text "note", null: false
+    t.jsonb "metadata"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_order_histories_on_created_at"
+    t.index ["order_id"], name: "index_order_histories_on_order_id"
+    t.index ["status"], name: "index_order_histories_on_status"
+    t.index ["user_id"], name: "index_order_histories_on_user_id"
+  end
+
   create_table "order_items", force: :cascade do |t|
     t.bigint "order_id", null: false
     t.bigint "product_id", null: false
@@ -123,6 +137,26 @@ ActiveRecord::Schema[8.0].define(version: 2025_03_21_091800) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "product_reviews", force: :cascade do |t|
+    t.bigint "product_id", null: false
+    t.bigint "user_id", null: false
+    t.bigint "order_item_id"
+    t.string "title", null: false
+    t.text "content", null: false
+    t.integer "rating", null: false
+    t.boolean "approved", default: false
+    t.jsonb "metadata"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["approved"], name: "index_product_reviews_on_approved"
+    t.index ["metadata"], name: "index_product_reviews_on_metadata", using: :gin
+    t.index ["order_item_id"], name: "index_product_reviews_on_order_item_id"
+    t.index ["product_id"], name: "index_product_reviews_on_product_id"
+    t.index ["rating"], name: "index_product_reviews_on_rating"
+    t.index ["user_id", "product_id"], name: "index_product_reviews_on_user_id_and_product_id", unique: true
+    t.index ["user_id"], name: "index_product_reviews_on_user_id"
+  end
+
   create_table "product_skus", force: :cascade do |t|
     t.bigint "product_id", null: false
     t.bigint "size_attribute_id", null: false
@@ -137,6 +171,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_03_21_091800) do
     t.index ["size_attribute_id"], name: "index_product_skus_on_size_attribute_id"
   end
 
+  create_table "product_variants", force: :cascade do |t|
+    t.bigint "product_id", null: false
+    t.string "sku", null: false
+    t.decimal "price", precision: 10, scale: 2, null: false
+    t.integer "stock_quantity", default: 0, null: false
+    t.jsonb "option_values", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["product_id"], name: "index_product_variants_on_product_id"
+    t.index ["sku"], name: "index_product_variants_on_sku", unique: true
+    t.index ["stock_quantity"], name: "index_product_variants_on_stock_quantity"
+  end
+
   create_table "products", force: :cascade do |t|
     t.string "name"
     t.text "description"
@@ -149,9 +196,15 @@ ActiveRecord::Schema[8.0].define(version: 2025_03_21_091800) do
     t.boolean "active", default: true
     t.boolean "featured", default: false
     t.integer "stock_quantity", default: 0
+    t.decimal "base_price", precision: 10, scale: 2, null: false
+    t.decimal "average_rating", precision: 3, scale: 2
+    t.integer "review_count", default: 0
+    t.jsonb "metadata", default: {}
     t.index ["active"], name: "index_products_on_active"
+    t.index ["average_rating"], name: "index_products_on_average_rating"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["featured"], name: "index_products_on_featured"
+    t.index ["metadata"], name: "index_products_on_metadata", using: :gin
     t.index ["sub_category_id"], name: "index_products_on_sub_category_id"
   end
 
@@ -198,14 +251,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_03_21_091800) do
   add_foreign_key "carts", "users"
   add_foreign_key "cities", "countries"
   add_foreign_key "order_details", "users"
+  add_foreign_key "order_histories", "orders"
+  add_foreign_key "order_histories", "users"
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "product_skus"
   add_foreign_key "order_items", "products"
   add_foreign_key "orders", "users"
   add_foreign_key "payment_details", "orders"
+  add_foreign_key "product_reviews", "order_items"
+  add_foreign_key "product_reviews", "products"
+  add_foreign_key "product_reviews", "users"
   add_foreign_key "product_skus", "product_attributes", column: "color_attribute_id"
   add_foreign_key "product_skus", "product_attributes", column: "size_attribute_id"
   add_foreign_key "product_skus", "products"
+  add_foreign_key "product_variants", "products"
   add_foreign_key "products", "categories"
   add_foreign_key "products", "sub_categories"
   add_foreign_key "sub_categories", "categories"
