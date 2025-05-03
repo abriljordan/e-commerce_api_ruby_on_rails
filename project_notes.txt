@@ -451,6 +451,1188 @@ This design follows modern e-commerce best practices and provides a solid founda
 - Security
 
 
+I'll extend the database design to include comprehensive admin functionality. Here's the additional schema for the admin area:
+
+```ruby
+# Admin Management
+create_table :admin_users do |t|
+  t.string :email, null: false, index: { unique: true }
+  t.string :password_digest
+  t.string :first_name
+  t.string :last_name
+  t.string :phone_number
+  t.boolean :is_super_admin, default: false
+  t.boolean :is_active, default: true
+  t.datetime :last_login_at
+  t.string :last_login_ip
+  t.timestamps
+end
+
+# Admin Roles and Permissions
+create_table :admin_roles do |t|
+  t.string :name, null: false, index: { unique: true }
+  t.string :description
+  t.jsonb :permissions # Store permissions as JSON
+  t.boolean :is_active, default: true
+  t.timestamps
+end
+
+create_table :admin_user_roles do |t|
+  t.references :admin_user, null: false, foreign_key: true
+  t.references :admin_role, null: false, foreign_key: true
+  t.timestamps
+  t.index [:admin_user_id, :admin_role_id], unique: true
+end
+
+# Admin Activity Logging
+create_table :admin_activity_logs do |t|
+  t.references :admin_user, null: false, foreign_key: true
+  t.string :action, null: false # create, update, delete, etc.
+  t.string :resource_type, null: false # Product, Order, User, etc.
+  t.bigint :resource_id, null: false
+  t.jsonb :changes # Store before/after changes
+  t.string :ip_address
+  t.string :user_agent
+  t.timestamps
+  t.index [:resource_type, :resource_id]
+end
+
+# Admin Notifications
+create_table :admin_notifications do |t|
+  t.string :title, null: false
+  t.text :message
+  t.string :notification_type # order, inventory, review, etc.
+  t.boolean :is_read, default: false
+  t.jsonb :metadata # Additional notification data
+  t.timestamps
+end
+
+create_table :admin_notification_reads do |t|
+  t.references :admin_user, null: false, foreign_key: true
+  t.references :admin_notification, null: false, foreign_key: true
+  t.timestamps
+  t.index [:admin_user_id, :admin_notification_id], unique: true
+end
+
+# Content Management
+create_table :pages do |t|
+  t.string :title, null: false
+  t.string :slug, null: false, index: { unique: true }
+  t.text :content
+  t.string :meta_title
+  t.text :meta_description
+  t.boolean :is_published, default: false
+  t.datetime :published_at
+  t.references :admin_user, foreign_key: true
+  t.timestamps
+end
+
+create_table :page_versions do |t|
+  t.references :page, null: false, foreign_key: true
+  t.text :content
+  t.references :admin_user, foreign_key: true
+  t.timestamps
+end
+
+# Marketing Tools
+create_table :email_templates do |t|
+  t.string :name, null: false
+  t.string :subject, null: false
+  t.text :content
+  t.string :template_type # order_confirmation, shipping_notification, etc.
+  t.boolean :is_active, default: true
+  t.timestamps
+end
+
+create_table :newsletters do |t|
+  t.string :subject, null: false
+  t.text :content
+  t.string :status # draft, scheduled, sent
+  t.datetime :scheduled_at
+  t.datetime :sent_at
+  t.integer :recipients_count
+  t.references :admin_user, foreign_key: true
+  t.timestamps
+end
+
+# Reporting and Analytics
+create_table :admin_dashboards do |t|
+  t.string :name, null: false
+  t.jsonb :widgets # Store dashboard widget configurations
+  t.references :admin_user, foreign_key: true
+  t.boolean :is_default, default: false
+  t.timestamps
+end
+
+create_table :scheduled_reports do |t|
+  t.string :name, null: false
+  t.string :report_type # sales, inventory, customer, etc.
+  t.jsonb :parameters # Report configuration
+  t.string :frequency # daily, weekly, monthly
+  t.string :format # pdf, csv, excel
+  t.string :recipients # email addresses
+  t.boolean :is_active, default: true
+  t.datetime :last_generated_at
+  t.timestamps
+end
+
+# System Settings
+create_table :system_settings do |t|
+  t.string :key, null: false, index: { unique: true }
+  t.text :value
+  t.string :value_type # string, integer, boolean, json
+  t.string :category # general, payment, shipping, etc.
+  t.text :description
+  t.timestamps
+end
+
+# Import/Export Management
+create_table :data_imports do |t|
+  t.string :import_type # products, customers, orders, etc.
+  t.string :status # pending, processing, completed, failed
+  t.string :file_name
+  t.integer :total_records
+  t.integer :processed_records
+  t.integer :successful_records
+  t.integer :failed_records
+  t.text :error_log
+  t.references :admin_user, foreign_key: true
+  t.timestamps
+end
+
+create_table :data_exports do |t|
+  t.string :export_type # products, customers, orders, etc.
+  t.string :status # pending, processing, completed, failed
+  t.string :file_name
+  t.integer :total_records
+  t.references :admin_user, foreign_key: true
+  t.timestamps
+end
+
+# Customer Support
+create_table :support_tickets do |t|
+  t.references :user, foreign_key: true
+  t.string :ticket_number, null: false, index: { unique: true }
+  t.string :subject, null: false
+  t.text :description
+  t.string :status # open, in_progress, resolved, closed
+  t.string :priority # low, medium, high, urgent
+  t.references :assigned_to, foreign_key: { to_table: :admin_users }
+  t.timestamps
+end
+
+create_table :support_ticket_messages do |t|
+  t.references :support_ticket, null: false, foreign_key: true
+  t.references :sender, polymorphic: true # User or AdminUser
+  t.text :message
+  t.boolean :is_internal_note, default: false
+  t.timestamps
+end
+
+create_table :support_ticket_attachments do |t|
+  t.references :support_ticket_message, null: false, foreign_key: true
+  t.string :file_name
+  t.string :file_path
+  t.string :file_type
+  t.integer :file_size
+  t.timestamps
+end
+```
+
+Key features of this admin area design:
+
+1. **Admin User Management**:
+   - Role-based access control (RBAC)
+   - Super admin capabilities
+   - Activity logging
+   - Security tracking
+
+2. **Content Management**:
+   - Page management with versioning
+   - Email templates
+   - Newsletter system
+
+3. **Marketing Tools**:
+   - Email campaign management
+   - Template system
+   - Newsletter distribution
+
+4. **Reporting and Analytics**:
+   - Customizable dashboards
+   - Scheduled reports
+   - Export capabilities
+
+5. **System Configuration**:
+   - Centralized settings management
+   - Configurable parameters
+   - Category-based organization
+
+6. **Data Management**:
+   - Import/Export functionality
+   - Error tracking
+   - Progress monitoring
+
+7. **Customer Support**:
+   - Ticket management system
+   - Internal notes
+   - File attachments
+   - Priority handling
+
+8. **Activity Monitoring**:
+   - Comprehensive logging
+   - Change tracking
+   - IP and user agent tracking
+
+9. **Notification System**:
+   - Real-time notifications
+   - Read status tracking
+   - Metadata support
+
+This admin area design provides:
+- Complete control over the e-commerce platform
+- Security and access control
+- Monitoring and analytics
+- Customer support capabilities
+- Marketing tools
+- Data management
+- System configuration
+
+Would you like me to elaborate on any specific aspect of the admin area design or explain how certain features would work together?
+
+
+Yes, I understand your concern. Looking at your current database design and comparing it with the comprehensive design I proposed, there are significant improvements that could be made. However, let me help you approach this systematically:
+
+1. **First, don't panic!** Your current implementation isn't "messed up" - it's just a simpler version that can be enhanced. Many successful e-commerce sites started with simpler designs and evolved over time.
+
+2. **Migration Strategy**:
+   Instead of rewriting everything at once, I recommend a phased approach:
+
+   a) **Phase 1 - Core Enhancements**:
+   - Add missing essential tables (like proper inventory management)
+   - Implement proper foreign key constraints
+   - Add necessary indexes
+   - Set up proper admin roles and permissions
+
+   b) **Phase 2 - Feature Expansion**:
+   - Add marketing features (promotions, newsletters)
+   - Implement advanced reporting
+   - Add customer support system
+
+   c) **Phase 3 - Optimization**:
+   - Implement caching
+   - Add performance optimizations
+   - Set up monitoring
+
+3. **Practical Steps**:
+
+```ruby
+# 1. Create a new migration for each phase
+# Example for Phase 1:
+class AddCoreEnhancements < ActiveRecord::Migration[7.0]
+  def change
+    # Add missing indexes
+    add_index :products, :slug, unique: true
+    add_index :categories, :slug, unique: true
+    
+    # Add proper foreign keys
+    add_foreign_key :cart_items, :product_variants
+    add_foreign_key :orders, :users
+    
+    # Add new tables
+    create_table :inventory_transactions do |t|
+      # ... (as shown in previous schema)
+    end
+    
+    # Add new columns to existing tables
+    add_column :products, :metadata, :jsonb
+    add_column :orders, :payment_status, :string
+  end
+end
+```
+
+4. **Code Migration Strategy**:
+
+```ruby
+# Instead of rewriting everything, create new models alongside existing ones
+# Example for Product model:
+class Product < ApplicationRecord
+  # Keep existing code
+  # Add new features gradually
+  
+  # New features
+  has_many :inventory_transactions
+  store_accessor :metadata
+  
+  # New methods
+  def update_inventory(quantity, transaction_type)
+    # New inventory management logic
+  end
+end
+```
+
+5. **Testing Strategy**:
+```ruby
+# Create new tests for new features while maintaining existing ones
+RSpec.describe 'Enhanced Product Management' do
+  describe 'inventory tracking' do
+    it 'tracks inventory changes' do
+      # New test cases
+    end
+  end
+  
+  describe 'existing functionality' do
+    it 'maintains current behavior' do
+      # Existing test cases
+    end
+  end
+end
+```
+
+6. **Deployment Strategy**:
+   - Use feature flags to gradually roll out new features
+   - Maintain backward compatibility
+   - Have a rollback plan
+
+Here's a practical example of how to start:
+
+```ruby
+# 1. First, create a new migration for core enhancements
+rails generate migration AddCoreEnhancements
+
+# 2. In the migration file:
+class AddCoreEnhancements < ActiveRecord::Migration[7.0]
+  def change
+    # Add essential indexes
+    add_index :products, :slug, unique: true
+    add_index :categories, :slug, unique: true
+    
+    # Add proper foreign keys
+    add_foreign_key :cart_items, :product_variants
+    add_foreign_key :orders, :users
+    
+    # Add inventory management
+    create_table :inventory_transactions do |t|
+      t.references :product_variant, null: false
+      t.integer :quantity, null: false
+      t.string :transaction_type
+      t.string :reference_type
+      t.bigint :reference_id
+      t.text :notes
+      t.timestamps
+    end
+    
+    # Add metadata support
+    add_column :products, :metadata, :jsonb
+  end
+end
+
+# 3. Update models gradually
+class Product < ApplicationRecord
+  # Existing associations
+  has_many :product_variants
+  belongs_to :category
+  
+  # New features
+  has_many :inventory_transactions, through: :product_variants
+  store_accessor :metadata
+  
+  # New methods
+  def update_inventory(quantity, transaction_type)
+    InventoryTransaction.create!(
+      product_variant: product_variants.first,
+      quantity: quantity,
+      transaction_type: transaction_type
+    )
+  end
+end
+```
+
+Key Recommendations:
+
+1. **Don't rewrite everything at once**:
+   - Start with the most critical improvements
+   - Maintain backward compatibility
+   - Use feature flags for new features
+
+2. **Prioritize improvements**:
+   - Fix data integrity issues first (foreign keys, indexes)
+   - Add essential missing features
+   - Then move to advanced features
+
+3. **Testing is crucial**:
+   - Write tests for new features
+   - Maintain existing tests
+   - Add integration tests for new workflows
+
+4. **Document the changes**:
+   - Keep a changelog
+   - Document new features
+   - Update API documentation
+
+5. **Consider using a staging environment**:
+   - Test changes thoroughly before production
+   - Have a rollback plan
+   - Monitor performance impact
+
+Would you like me to help you create a specific migration plan or focus on a particular area of improvement first? We can start with the most critical enhancements and work our way up to the more advanced features.
+
+
+This is a really important question about the future of software development and personal growth. Let me break this down:
+
+1. **Understanding vs. Just Copying**:
+   - If you're just copying and pasting code without understanding it, you're doing yourself a disservice, especially if you plan to put this on your resume
+   - During job interviews, you'll likely be asked about:
+     - Why you made certain architectural decisions
+     - How specific features work
+     - How you would debug issues
+     - How you would scale the system
+   - If you can't answer these questions because you didn't write the code, it will be obvious
+
+2. **The "Vibe Coding" Concern**:
+   - While AI can generate code, it can't replace:
+     - Understanding of system architecture
+     - Ability to debug complex issues
+     - Making informed decisions about trade-offs
+     - Explaining technical decisions to stakeholders
+   - Companies still need developers who understand the code, not just product managers who can prompt AI
+
+3. **Recommended Approach**:
+   Instead of just copying the code, I suggest:
+
+   a) **Study the Architecture First**:
+   ```ruby
+   # Understand the core concepts:
+   - Database relationships
+   - API endpoints
+   - Authentication flow
+   - Business logic
+   ```
+
+   b) **Implement in Phases**:
+   ```ruby
+   # Phase 1: Core Models
+   class User < ApplicationRecord
+     # Study and understand each line
+     # Implement with your own understanding
+     # Add comments explaining the purpose
+   end
+
+   # Phase 2: Controllers
+   class ProductsController < ApplicationController
+     # Understand the request/response cycle
+     # Implement error handling
+     # Add proper validations
+   end
+   ```
+
+   c) **Add Your Own Features**:
+   ```ruby
+   # Don't just copy, add your own improvements
+   class Product
+     def self.search(query)
+       # Implement your own search logic
+       # Understand how it integrates with the database
+     end
+   end
+   ```
+
+4. **What Employers Look For**:
+   - Understanding of the technology stack
+   - Ability to solve problems
+   - Capacity to learn and adapt
+   - Communication skills
+   - Debugging abilities
+
+5. **Better Approach for Your Resume**:
+   Instead of just listing the project, document:
+   - What you learned from implementing it
+   - Challenges you overcame
+   - Decisions you made
+   - How you would improve it
+   - What you would do differently
+
+6. **Practical Exercise**:
+   Try this exercise for each component:
+
+   ```ruby
+   # 1. Read and understand the code
+   class Cart
+     has_many :cart_items
+     belongs_to :user
+   end
+
+   # 2. Document your understanding
+   # - What is the relationship between Cart and CartItems?
+   # - Why is this relationship important?
+   # - What happens when a cart is deleted?
+
+   # 3. Implement with your own understanding
+   class Cart
+     # Implement with your own comments
+     # Add your own validations
+     # Include error handling
+   end
+   ```
+
+7. **Interview Preparation**:
+   Be ready to discuss:
+   - Why you chose certain database relationships
+   - How you handle edge cases
+   - Performance considerations
+   - Security measures
+   - Testing strategy
+
+8. **Learning Path**:
+   1. Study the architecture
+   2. Implement core features
+   3. Add your own improvements
+   4. Document your decisions
+   5. Practice explaining your code
+
+Remember:
+- AI is a tool, not a replacement for understanding
+- Employers value problem-solving skills over code generation
+- The ability to explain and justify decisions is crucial
+- Understanding the "why" is more important than the "what"
+
+Would you like me to help you create a structured learning plan for understanding and implementing this project? We can focus on one component at a time, ensuring you truly understand each part before moving to the next.
+
+
+I'll create a structured learning plan that will help you truly understand and implement the e-commerce project. We'll break it down into manageable phases, focusing on understanding before implementation.
+
+# E-commerce Project Learning Plan
+
+## Phase 1: Foundation Understanding (1-2 weeks)
+
+### Week 1: Core Concepts and Architecture
+1. **Database Design Study**
+   ```ruby
+   # Study these relationships:
+   - Users -> Orders
+   - Products -> ProductVariants
+   - Carts -> CartItems
+   - Orders -> OrderItems
+   ```
+
+   Exercise:
+   - Draw the database schema on paper
+   - Explain each relationship type (has_many, belongs_to)
+   - Identify the foreign keys
+   - Understand the purpose of each table
+
+2. **Authentication System**
+   ```ruby
+   # Study:
+   - JWT implementation
+   - User authentication flow
+   - Session management
+   - Password hashing
+   ```
+
+   Exercise:
+   - Write down the authentication flow
+   - Explain how JWT tokens work
+   - Document security measures
+
+### Week 2: Core Models Implementation
+1. **User Model**
+   ```ruby
+   class User < ApplicationRecord
+     # Study and implement:
+     - Validations
+     - Associations
+     - Authentication methods
+     - Password handling
+   ```
+
+   Exercise:
+   - Implement user registration
+   - Add email validation
+   - Create password reset functionality
+
+2. **Product Management**
+   ```ruby
+   class Product < ApplicationRecord
+     # Study and implement:
+     - Category relationships
+     - Variant management
+     - Inventory tracking
+     - Price handling
+   ```
+
+   Exercise:
+   - Create product CRUD operations
+   - Implement variant management
+   - Add inventory tracking
+
+## Phase 2: Business Logic (2-3 weeks)
+
+### Week 3: Shopping Cart System
+1. **Cart Implementation**
+   ```ruby
+   class Cart < ApplicationRecord
+     # Study and implement:
+     - Cart creation
+     - Item addition/removal
+     - Quantity updates
+     - Price calculations
+   ```
+
+   Exercise:
+   - Implement cart operations
+   - Add quantity validation
+   - Create price calculation methods
+
+2. **Cart Items Management**
+   ```ruby
+   class CartItem < ApplicationRecord
+     # Study and implement:
+     - Product association
+     - Quantity handling
+     - Price calculations
+     - Stock validation
+   ```
+
+   Exercise:
+   - Add stock validation
+   - Implement price updates
+   - Create quantity limits
+
+### Week 4: Order Processing
+1. **Order System**
+   ```ruby
+   class Order < ApplicationRecord
+     # Study and implement:
+     - Order creation
+     - Status management
+     - Payment processing
+     - Shipping handling
+   ```
+
+   Exercise:
+   - Create order workflow
+   - Implement status transitions
+   - Add payment integration
+
+2. **Order Items**
+   ```ruby
+   class OrderItem < ApplicationRecord
+     # Study and implement:
+     - Product association
+     - Price locking
+     - Quantity handling
+     - Inventory updates
+   ```
+
+   Exercise:
+   - Implement price locking
+   - Add inventory updates
+   - Create order item validations
+
+## Phase 3: Advanced Features (2-3 weeks)
+
+### Week 5: Admin System
+1. **Admin Implementation**
+   ```ruby
+   class AdminUser < ApplicationRecord
+     # Study and implement:
+     - Role management
+     - Permission system
+     - Activity logging
+     - Dashboard features
+   ```
+
+   Exercise:
+   - Create admin authentication
+   - Implement role-based access
+   - Add activity logging
+
+2. **Admin Features**
+   ```ruby
+   # Study and implement:
+   - Product management
+   - Order processing
+   - User management
+   - Reporting system
+   ```
+
+   Exercise:
+   - Create admin dashboard
+   - Implement reporting features
+   - Add user management
+
+### Week 6: Testing and Optimization
+1. **Testing Implementation**
+   ```ruby
+   # Study and implement:
+   - Model tests
+   - Controller tests
+   - Integration tests
+   - Performance tests
+   ```
+
+   Exercise:
+   - Write test cases
+   - Implement test coverage
+   - Add performance benchmarks
+
+2. **Optimization**
+   ```ruby
+   # Study and implement:
+   - Database indexing
+   - Query optimization
+   - Caching strategies
+   - Performance monitoring
+   ```
+
+   Exercise:
+   - Optimize database queries
+   - Implement caching
+   - Add performance monitoring
+
+## Daily Learning Routine
+
+1. **Morning (1 hour)**
+   - Study the current phase's concepts
+   - Read documentation
+   - Review code examples
+
+2. **Afternoon (2 hours)**
+   - Implement features
+   - Write tests
+   - Debug issues
+
+3. **Evening (1 hour)**
+   - Review what you learned
+   - Document challenges
+   - Plan next steps
+
+## Documentation Requirements
+
+For each component you implement, document:
+
+1. **Technical Documentation**
+   ```ruby
+   # Purpose
+   # Implementation details
+   # Dependencies
+   # API endpoints
+   # Database schema
+   ```
+
+2. **Learning Documentation**
+   ```ruby
+   # What you learned
+   # Challenges faced
+   # Solutions found
+   # Improvements made
+   ```
+
+## Interview Preparation
+
+For each feature, prepare to discuss:
+
+1. **Technical Decisions**
+   - Why you chose certain approaches
+   - Alternative solutions considered
+   - Trade-offs made
+
+2. **Implementation Details**
+   - How the feature works
+   - Edge cases handled
+   - Security considerations
+
+3. **Improvement Ideas**
+   - What you would do differently
+   - How you would scale it
+   - Future enhancements
+
+Would you like to start with Phase 1? We can begin with the database design study and work through each component systematically. I can provide more detailed exercises and guidance for each step.
+
+
+I'll provide a detailed breakdown of all three phases, including specific exercises and implementation details for each component.
+
+# Complete E-commerce Project Learning Plan
+
+## Phase 1: Foundation Understanding (2-3 weeks)
+
+### Week 1: Database Design & Core Models
+
+1. **Database Schema Study**
+```ruby
+# Core Tables to Understand:
+# Users and Authentication
+create_table :users do |t|
+  t.string :email, null: false
+  t.string :password_digest
+  t.string :first_name
+  t.string :last_name
+  t.boolean :is_admin, default: false
+  t.timestamps
+end
+
+# Products and Inventory
+create_table :products do |t|
+  t.string :name, null: false
+  t.text :description
+  t.decimal :price, precision: 10, scale: 2
+  t.integer :stock_quantity
+  t.references :category, foreign_key: true
+  t.timestamps
+end
+
+# Exercise 1: Database Relationships
+# Draw the relationships between:
+# - Users -> Orders
+# - Products -> ProductVariants
+# - Carts -> CartItems
+# - Orders -> OrderItems
+```
+
+2. **User Model Implementation**
+```ruby
+class User < ApplicationRecord
+  # Exercise 2: Implement these features
+  has_secure_password
+  validates :email, presence: true, uniqueness: true
+  validates :password, length: { minimum: 8 }
+  
+  # Add these methods
+  def generate_jwt
+    # Implement JWT generation
+  end
+  
+  def self.authenticate(email, password)
+    # Implement authentication
+  end
+end
+```
+
+### Week 2: Product Management & Authentication
+
+1. **Product Model Implementation**
+```ruby
+class Product < ApplicationRecord
+  # Exercise 3: Implement these features
+  belongs_to :category
+  has_many :product_variants
+  has_many :cart_items
+  has_many :order_items
+  
+  validates :name, presence: true
+  validates :price, numericality: { greater_than: 0 }
+  
+  # Add these methods
+  def update_stock(quantity)
+    # Implement stock update logic
+  end
+  
+  def available?
+    # Check if product is in stock
+  end
+end
+```
+
+2. **Authentication Controller**
+```ruby
+class Api::V1::AuthController < ApplicationController
+  # Exercise 4: Implement these endpoints
+  def login
+    # Implement login logic
+  end
+  
+  def register
+    # Implement registration
+  end
+  
+  def refresh_token
+    # Implement token refresh
+  end
+end
+```
+
+## Phase 2: Business Logic (3-4 weeks)
+
+### Week 3: Shopping Cart System
+
+1. **Cart Model Implementation**
+```ruby
+class Cart < ApplicationRecord
+  # Exercise 5: Implement these features
+  belongs_to :user
+  has_many :cart_items
+  has_many :products, through: :cart_items
+  
+  # Add these methods
+  def add_product(product_id, quantity)
+    # Implement product addition
+  end
+  
+  def remove_product(product_id)
+    # Implement product removal
+  end
+  
+  def total_price
+    # Calculate cart total
+  end
+end
+```
+
+2. **Cart Controller**
+```ruby
+class Api::V1::CartItemsController < ApplicationController
+  # Exercise 6: Implement these endpoints
+  def create
+    # Add item to cart
+  end
+  
+  def update
+    # Update item quantity
+  end
+  
+  def destroy
+    # Remove item from cart
+  end
+end
+```
+
+### Week 4: Order Processing System
+
+1. **Order Model Implementation**
+```ruby
+class Order < ApplicationRecord
+  # Exercise 7: Implement these features
+  belongs_to :user
+  has_many :order_items
+  has_many :products, through: :order_items
+  
+  enum status: {
+    pending: 0,
+    processing: 1,
+    shipped: 2,
+    delivered: 3,
+    cancelled: 4
+  }
+  
+  # Add these methods
+  def process_payment
+    # Implement payment processing
+  end
+  
+  def update_status(new_status)
+    # Implement status updates
+  end
+end
+```
+
+2. **Order Controller**
+```ruby
+class Api::V1::OrdersController < ApplicationController
+  # Exercise 8: Implement these endpoints
+  def create
+    # Create new order
+  end
+  
+  def show
+    # Show order details
+  end
+  
+  def update
+    # Update order status
+  end
+end
+```
+
+## Phase 3: Advanced Features (3-4 weeks)
+
+### Week 5: Admin System
+
+1. **Admin User Model**
+```ruby
+class AdminUser < ApplicationRecord
+  # Exercise 9: Implement these features
+  has_secure_password
+  has_many :admin_roles
+  has_many :roles, through: :admin_roles
+  
+  # Add these methods
+  def has_permission?(permission)
+    # Check admin permissions
+  end
+  
+  def log_activity(action, resource)
+    # Log admin activities
+  end
+end
+```
+
+2. **Admin Dashboard**
+```ruby
+class Admin::DashboardController < ApplicationController
+  # Exercise 10: Implement these features
+  def index
+    # Show dashboard statistics
+  end
+  
+  def products
+    # Manage products
+  end
+  
+  def orders
+    # Manage orders
+  end
+  
+  def users
+    # Manage users
+  end
+end
+```
+
+### Week 6: Testing & Optimization
+
+1. **Test Implementation**
+```ruby
+# Exercise 11: Implement these tests
+RSpec.describe User, type: :model do
+  describe 'validations' do
+    it 'validates email presence' do
+      # Implement test
+    end
+  end
+end
+
+RSpec.describe 'Cart API', type: :request do
+  describe 'POST /api/v1/cart_items' do
+    it 'adds product to cart' do
+      # Implement test
+    end
+  end
+end
+```
+
+2. **Performance Optimization**
+```ruby
+# Exercise 12: Implement these optimizations
+class Product < ApplicationRecord
+  # Add caching
+  after_save :clear_cache
+  
+  def self.cached_find(id)
+    Rails.cache.fetch("product_#{id}") do
+      find(id)
+    end
+  end
+  
+  private
+  
+  def clear_cache
+    Rails.cache.delete("product_#{id}")
+  end
+end
+```
+
+## Daily Implementation Plan
+
+### Day 1-3: Database & Models
+```ruby
+# Morning: Study database schema
+# Afternoon: Implement User model
+# Evening: Write tests for User model
+
+class User < ApplicationRecord
+  # Implement features
+end
+
+RSpec.describe User, type: :model do
+  # Write tests
+end
+```
+
+### Day 4-6: Authentication
+```ruby
+# Morning: Study JWT authentication
+# Afternoon: Implement AuthController
+# Evening: Write integration tests
+
+class Api::V1::AuthController < ApplicationController
+  # Implement endpoints
+end
+```
+
+### Day 7-9: Product Management
+```ruby
+# Morning: Study product relationships
+# Afternoon: Implement Product model
+# Evening: Write product tests
+
+class Product < ApplicationRecord
+  # Implement features
+end
+```
+
+## Documentation Requirements
+
+For each component, create:
+
+1. **Technical Documentation**
+```markdown
+# Component Name
+## Purpose
+[Explain the purpose]
+
+## Implementation
+[Detail the implementation]
+
+## API Endpoints
+[Document endpoints]
+
+## Database Schema
+[Show relevant schema]
+```
+
+2. **Learning Documentation**
+```markdown
+# What I Learned
+## Challenges
+[Document challenges]
+
+## Solutions
+[Explain solutions]
+
+## Improvements
+[Suggest improvements]
+```
+
+## Interview Preparation Points
+
+For each feature, prepare to discuss:
+
+1. **Technical Decisions**
+```ruby
+# Example: Why use JWT for authentication?
+- Stateless authentication
+- Scalability
+- Security considerations
+```
+
+2. **Implementation Details**
+```ruby
+# Example: Cart implementation
+- How items are stored
+- Price calculations
+- Stock validation
+```
+
+3. **Improvement Ideas**
+```ruby
+# Example: Future enhancements
+- Real-time updates
+- Caching strategies
+- Performance optimizations
+```
+
+Would you like to start with the first exercise? We can begin with the database schema study and work through the User model implementation. I can provide more detailed guidance and code examples for each step.
+
 
 Yes, we can perform integration testing using curl commands. I'll provide a comprehensive set of curl commands to test various endpoints of your e-commerce API:
 
